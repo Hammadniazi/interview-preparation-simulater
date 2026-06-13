@@ -1,6 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InterviewAI — AI-Powered Interview Preparation Simulator
 
-## Getting Started
+A production-quality SaaS application built with Next.js 16, Gemini AI, and Supabase.
+
+## Features
+
+- **AI Interview Simulator** — 10 dynamically generated questions per session
+- **Real-Time Scoring** — 4-dimension evaluation (Technical, Communication, Relevance, Confidence)
+- **Detailed Reports** — Strengths, weaknesses, skill gaps, recommendations
+- **30-Day Learning Roadmap** — Personalized improvement plan
+- **Resume Analysis** — Upload CV to get tailored questions
+- **Dashboard Analytics** — Score trends and performance tracking
+- **PDF Export** — Download your interview report
+- **Dark/Light Mode** — Fully themed UI
+
+## Quick Start
+
+### 1. Configure Environment Variables
+
+```bash
+cp .env.local.example .env.local
+```
+
+Edit `.env.local` with your keys (see below).
+
+### 2. Get a Gemini API Key
+
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Click "Get API Key" → Create key → Copy it
+
+### 3. Run Locally
 
 First, run the development server:
 

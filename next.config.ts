@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // Optimize package imports for better performance
+  },
+  images: {
+    remotePatterns: [],
+  },
 };
 
 export default nextConfig;
