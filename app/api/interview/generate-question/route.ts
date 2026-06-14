@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const question = await generateInterviewQuestion(
+    const generated = await generateInterviewQuestion(
       jobRole,
       difficulty as Difficulty,
       interviewType as InterviewType,
@@ -18,11 +18,24 @@ export async function POST(req: NextRequest) {
       previousQuestions ?? []
     );
 
-    return NextResponse.json({ question });
+    return NextResponse.json(generated);
   } catch (error) {
     console.error('Error generating question:', error);
+    const message = String(error);
+    if (message.includes('429') || message.includes('rate_limit')) {
+      return NextResponse.json(
+        { error: 'Rate limit reached. Please wait a moment and try again.' },
+        { status: 429 }
+      );
+    }
+    if (message.includes('401') || message.includes('api_key') || message.includes('Authentication')) {
+      return NextResponse.json(
+        { error: 'Invalid API key. Please check your GROQ_API_KEY in .env.local' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
-      { error: 'Failed to generate question. Please check your API key.' },
+      { error: 'Failed to generate question. Please check your GROQ_API_KEY in .env.local' },
       { status: 500 }
     );
   }

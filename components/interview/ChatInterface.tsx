@@ -19,7 +19,10 @@ interface ChatInterfaceProps {
   candidateName: string;
   jobRole: string;
   isComplete: boolean;
+  mcqOptions?: string[] | null;
 }
+
+const MCQ_LABELS = ['A', 'B', 'C', 'D'];
 
 export function ChatInterface({
   messages,
@@ -29,12 +32,15 @@ export function ChatInterface({
   candidateName,
   jobRole,
   isComplete,
+  mcqOptions,
 }: ChatInterfaceProps) {
   const [answer, setAnswer] = useState('');
+  const [selectedMcq, setSelectedMcq] = useState<number | null>(null);
   const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isProcessing = isLoading || isEvaluating;
+  const isMcq = !!(mcqOptions && mcqOptions.length === 4);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -42,11 +48,29 @@ export function ChatInterface({
     }
   }, [messages, isLoading]);
 
+  // Reset MCQ selection when new question arrives
+  useEffect(() => {
+    setSelectedMcq(null);
+  }, [mcqOptions]);
+
   const handleSubmit = () => {
-    if (!answer.trim() || isProcessing || isComplete) return;
-    onSubmitAnswer(answer.trim());
-    setAnswer('');
-    textareaRef.current?.focus();
+    if (isProcessing || isComplete) return;
+    if (isMcq) {
+      if (selectedMcq === null) return;
+      const label = MCQ_LABELS[selectedMcq];
+      onSubmitAnswer(`${label}) ${mcqOptions![selectedMcq]}`);
+      setSelectedMcq(null);
+    } else {
+      if (!answer.trim()) return;
+      onSubmitAnswer(answer.trim());
+      setAnswer('');
+      textareaRef.current?.focus();
+    }
+  };
+
+  const handleMcqSelect = (index: number) => {
+    if (isProcessing || isComplete) return;
+    setSelectedMcq(index);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -200,43 +224,87 @@ export function ChatInterface({
       {!isComplete && (
         <div className="p-4 border-t border-border/50 bg-background/50 backdrop-blur-sm">
           <div className="max-w-3xl mx-auto">
-            <div className="relative flex gap-2">
-              <Textarea
-                ref={textareaRef}
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={isLoading ? 'Waiting for question...' : 'Type your answer... (Press Enter to submit, Shift+Enter for new line)'}
-                className="min-h-[80px] max-h-[200px] resize-none pr-24 text-sm"
-                disabled={isProcessing}
-              />
-              <div className="absolute right-2 bottom-2 flex gap-1.5">
+            {isMcq ? (
+              /* MCQ mode: clickable option buttons */
+              <div className="space-y-2">
+                {mcqOptions!.map((option, index) => (
+                  <motion.button
+                    key={index}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => handleMcqSelect(index)}
+                    disabled={isProcessing}
+                    className={cn(
+                      'w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border text-sm transition-all duration-150',
+                      selectedMcq === index
+                        ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium'
+                        : 'border-border hover:border-violet-300 hover:bg-muted/50',
+                      isProcessing && 'opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    <span className={cn(
+                      'shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold transition-colors',
+                      selectedMcq === index
+                        ? 'border-violet-500 bg-violet-500 text-white'
+                        : 'border-border text-muted-foreground'
+                    )}>
+                      {MCQ_LABELS[index]}
+                    </span>
+                    {option}
+                  </motion.button>
+                ))}
                 <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={toggleListening}
-                  className={cn(
-                    'h-8 w-8',
-                    isListening && 'text-red-500 bg-red-500/10'
-                  )}
-                  title="Voice input"
-                >
-                  {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </Button>
-                <Button
-                  size="icon"
                   onClick={handleSubmit}
-                  disabled={!answer.trim() || isProcessing}
-                  className="h-8 w-8 bg-gradient-to-br from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50"
+                  disabled={selectedMcq === null || isProcessing}
+                  className="w-full mt-1 bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 gap-2"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <Send className="w-4 h-4" />
+                  Submit Answer
                 </Button>
               </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              <AlertCircle className="w-3 h-3 inline mr-1" />
-              Be thorough and specific. The AI evaluates depth, clarity, and relevance.
-            </p>
+            ) : (
+              /* Open-ended mode: textarea */
+              <>
+                <div className="relative flex gap-2">
+                  <Textarea
+                    ref={textareaRef}
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={isLoading ? 'Waiting for question...' : 'Type your answer... (Press Enter to submit, Shift+Enter for new line)'}
+                    className="min-h-[80px] max-h-[200px] resize-none pr-24 text-sm"
+                    disabled={isProcessing}
+                  />
+                  <div className="absolute right-2 bottom-2 flex gap-1.5">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={toggleListening}
+                      className={cn(
+                        'h-8 w-8',
+                        isListening && 'text-red-500 bg-red-500/10'
+                      )}
+                      title="Voice input"
+                    >
+                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                      size="icon"
+                      onClick={handleSubmit}
+                      disabled={!answer.trim() || isProcessing}
+                      className="h-8 w-8 bg-gradient-to-br from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  <AlertCircle className="w-3 h-3 inline mr-1" />
+                  Be thorough and specific. The AI evaluates depth, clarity, and relevance.
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}

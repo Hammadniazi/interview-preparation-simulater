@@ -1,10 +1,26 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Difficulty, InterviewType, AnswerEvaluation, InterviewReport, LearningWeek, ResumeAnalysis } from './types';
+import Groq from "groq-sdk";
+import {
+  Difficulty,
+  InterviewType,
+  AnswerEvaluation,
+  InterviewReport,
+  LearningWeek,
+  ResumeAnalysis,
+  GeneratedQuestion,
+} from "./types";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-function getModel() {
-  return genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const MODEL = "llama-3.3-70b-versatile";
+
+async function generate(prompt: string): Promise<string> {
+  const res = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.7,
+    max_tokens: 1024,
+  });
+  return res.choices[0].message.content?.trim() ?? "";
 }
 
 export async function generateInterviewQuestion(
@@ -12,46 +28,84 @@ export async function generateInterviewQuestion(
   difficulty: Difficulty,
   interviewType: InterviewType,
   questionIndex: number,
-  previousQuestions: string[]
-): Promise<string> {
-  const model = getModel();
+  previousQuestions: string[],
+): Promise<GeneratedQuestion> {
+  const prev =
+    previousQuestions.length > 0
+      ? `Previous questions asked: ${previousQuestions.map((q, i) => `${i + 1}. ${q}`).join("; ")}. Do NOT repeat these.`
+      : "";
 
-  const difficultyMap = {
-    beginner: 'entry-level, foundational concepts',
-    intermediate: 'mid-level, practical application',
-    advanced: 'senior-level, deep expertise',
-    expert: 'expert-level, architectural and leadership aspects',
-  };
-
-  const typeMap = {
-    technical: 'technical coding/problem-solving',
-    behavioral: 'behavioral (STAR method)',
-    'system-design': 'system design and architecture',
-    mixed: 'mixed (alternating technical and behavioral)',
-    hr: 'HR/culture fit and soft skills',
-  };
-
-  const prev = previousQuestions.length > 0
-    ? `Previous questions asked: ${previousQuestions.map((q, i) => `${i + 1}. ${q}`).join('; ')}. Do NOT repeat these.`
-    : '';
-
-  const prompt = `You are an expert technical interviewer at a top tech company.
-Generate question #${questionIndex + 1} of 10 for a ${jobRole} interview.
-Difficulty: ${difficultyMap[difficulty]}
-Type: ${typeMap[interviewType]}
+  // Beginner: generate MCQ
+  if (difficulty === "beginner") {
+    const prompt = `You are a friendly interviewer testing foundational knowledge for a ${jobRole} beginner.
+Generate multiple-choice question #${questionIndex + 1} of 10.
 ${prev}
 
 Rules:
-- Return ONLY the question text, nothing else
-- Make it specific and relevant to the role
-- Progressively increase complexity across questions
-- For behavioral questions, reference specific scenarios
-- For technical questions, be precise about technologies
+- Question should test basic, foundational knowledge relevant to ${jobRole}
+- All 4 options must be plausible (not obviously wrong)
+- Only one option is correct
+- Return ONLY valid JSON, no markdown, no explanation:
+{
+  "question": "<the question text>",
+  "options": ["<option A text>", "<option B text>", "<option C text>", "<option D text>"],
+  "correct": "<A or B or C or D>"
+}`;
+
+    const text = await generate(prompt);
+    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    return {
+      question: parsed.question,
+      mcqOptions: parsed.options as string[],
+    };
+  }
+
+  // Intermediate / Advanced / Expert: open-ended
+  const difficultyMap = {
+    beginner: "entry-level, foundational concepts",
+    intermediate: "mid-level, practical application",
+    advanced: "senior-level, deep expertise",
+    expert: "expert-level, architectural and leadership aspects",
+  };
+
+  const typeMap = {
+    technical: "technical coding/problem-solving",
+    behavioral: "behavioral (STAR method)",
+    "system-design": "system design and architecture",
+    mixed: "mixed (alternating technical and behavioral)",
+    hr: "HR/culture fit and soft skills",
+  };
+
+  const practicalGuide =
+    interviewType === "technical" || interviewType === "mixed"
+      ? `Question style guide (rotate through these):
+- Scenario-based: "You have a production system where X is happening, how do you..."
+- Coding/implementation: "How would you implement/design/build X?"
+- Debugging: "A user reports Y, walk me through how you'd debug this"
+- Trade-off: "Compare approach A vs B for solving X, which would you choose and why?"
+- Real-world: "At your last job, how did you handle X situation?"
+Avoid pure theory questions like "What is X?" or "Define X". Make them practical and applied.`
+      : `Make questions scenario-based and specific, not generic definitions.`;
+
+  const prompt = `You are a senior engineering interviewer at a top tech company (Google/Meta/Amazon level).
+Generate question #${questionIndex + 1} of 10 for a ${jobRole} position.
+Difficulty: ${difficultyMap[difficulty]}
+Interview type: ${typeMap[interviewType]}
+${prev}
+
+${practicalGuide}
+
+Rules:
+- Return ONLY the question text, nothing else — no preamble, no labels, no numbering
+- Be specific to ${jobRole} responsibilities, not generic
+- Question #${questionIndex + 1}: ${questionIndex < 3 ? "warm-up level" : questionIndex < 7 ? "core competency level" : "advanced/challenging level"}
+- For behavioral: use STAR-prompting ("Tell me about a time when...")
+- For technical: reference real tools, frameworks, or systems relevant to ${jobRole}
 
 Question:`;
 
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+  return { question: await generate(prompt) };
 }
 
 export async function evaluateAnswer(
@@ -59,10 +113,8 @@ export async function evaluateAnswer(
   answer: string,
   jobRole: string,
   difficulty: Difficulty,
-  interviewType: InterviewType
+  interviewType: InterviewType,
 ): Promise<AnswerEvaluation> {
-  const model = getModel();
-
   const prompt = `You are an expert interviewer evaluating a candidate's answer for a ${jobRole} position.
 
 Question: "${question}"
@@ -88,11 +140,11 @@ Scoring guide:
 - relevance: how well the answer addresses the question
 - confidence: assertiveness and conviction in the response`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
-
-  // Strip markdown code blocks if present
-  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const text = await generate(prompt);
+  const cleaned = text
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
   const parsed = JSON.parse(cleaned);
 
   return {
@@ -110,21 +162,36 @@ export async function generateFinalReport(
   jobRole: string,
   difficulty: Difficulty,
   interviewType: InterviewType,
-  evaluations: AnswerEvaluation[]
-): Promise<Omit<InterviewReport, 'sessionId' | 'completedAt' | 'evaluations'>> {
-  const model = getModel();
-
-  const evalSummary = evaluations.map((e, i) =>
-    `Q${i + 1}: "${e.question}" | Score: ${e.overallScore}/100 | Feedback: ${e.feedback}`
-  ).join('\n');
+  evaluations: AnswerEvaluation[],
+): Promise<Omit<InterviewReport, "sessionId" | "completedAt" | "evaluations">> {
+  const evalSummary = evaluations
+    .map(
+      (e, i) =>
+        `Q${i + 1}: "${e.question}" | Score: ${e.overallScore}/100 | Feedback: ${e.feedback}`,
+    )
+    .join("\n");
 
   const avgScores = {
-    technicalKnowledge: Math.round(evaluations.reduce((s, e) => s + e.score.technicalKnowledge, 0) / evaluations.length),
-    communication: Math.round(evaluations.reduce((s, e) => s + e.score.communication, 0) / evaluations.length),
-    relevance: Math.round(evaluations.reduce((s, e) => s + e.score.relevance, 0) / evaluations.length),
-    confidence: Math.round(evaluations.reduce((s, e) => s + e.score.confidence, 0) / evaluations.length),
+    technicalKnowledge: Math.round(
+      evaluations.reduce((s, e) => s + e.score.technicalKnowledge, 0) /
+        evaluations.length,
+    ),
+    communication: Math.round(
+      evaluations.reduce((s, e) => s + e.score.communication, 0) /
+        evaluations.length,
+    ),
+    relevance: Math.round(
+      evaluations.reduce((s, e) => s + e.score.relevance, 0) /
+        evaluations.length,
+    ),
+    confidence: Math.round(
+      evaluations.reduce((s, e) => s + e.score.confidence, 0) /
+        evaluations.length,
+    ),
   };
-  const overallScore = Math.round(Object.values(avgScores).reduce((a, b) => a + b, 0) / 4);
+  const overallScore = Math.round(
+    Object.values(avgScores).reduce((a, b) => a + b, 0) / 4,
+  );
 
   const prompt = `You are a senior career coach analyzing interview performance for ${candidateName} applying for ${jobRole}.
 
@@ -160,9 +227,11 @@ Return ONLY a valid JSON object (no markdown):
 
 Make the learning roadmap 4 weeks long with specific, actionable items tailored to the gaps identified.`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
-  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const text = await generate(prompt);
+  const cleaned = text
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
   const parsed = JSON.parse(cleaned);
 
   return {
@@ -180,9 +249,9 @@ Make the learning roadmap 4 weeks long with specific, actionable items tailored 
   };
 }
 
-export async function analyzeResume(resumeText: string): Promise<ResumeAnalysis> {
-  const model = getModel();
-
+export async function analyzeResume(
+  resumeText: string,
+): Promise<ResumeAnalysis> {
   const prompt = `You are an expert technical recruiter analyzing a resume.
 
 Resume Content:
@@ -190,9 +259,9 @@ ${resumeText}
 
 Return ONLY a valid JSON object (no markdown):
 {
-  "skills": ["<skill 1>", "<skill 2>", ...],
-  "experience": ["<experience highlight 1>", "<experience highlight 2>", ...],
-  "education": ["<education 1>", ...],
+  "skills": ["<skill 1>", "<skill 2>"],
+  "experience": ["<experience highlight 1>", "<experience highlight 2>"],
+  "education": ["<education 1>"],
   "suggestedQuestions": ["<interview question 1>", "<interview question 2>", "<interview question 3>", "<interview question 4>", "<interview question 5>"],
   "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
   "improvements": ["<area to improve 1>", "<area to improve 2>", "<area to improve 3>"]
@@ -200,8 +269,10 @@ Return ONLY a valid JSON object (no markdown):
 
 Generate personalized interview questions based on the candidate's specific background.`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
-  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const text = await generate(prompt);
+  const cleaned = text
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
   return JSON.parse(cleaned);
 }

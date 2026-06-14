@@ -35,6 +35,7 @@ export default function InterviewSessionPage({ params }: PageProps) {
     isEvaluating,
     isComplete,
     submitAnswer,
+    currentMcqOptions,
     error,
   } = useInterview({
     sessionId,
@@ -120,6 +121,7 @@ export default function InterviewSessionPage({ params }: PageProps) {
                 candidateName={candidateName}
                 jobRole={jobRole}
                 isComplete={isComplete}
+                mcqOptions={currentMcqOptions}
               />
             ) : (
               <div className="flex items-center justify-center h-full">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { InterviewSession, Message, AnswerEvaluation, Difficulty, InterviewType } from '@/lib/types';
 import { generateId } from '@/lib/utils';
 
@@ -15,6 +15,7 @@ interface UseInterviewOptions {
 interface UseInterviewReturn {
   session: InterviewSession | null;
   currentQuestion: string | null;
+  currentMcqOptions: string[] | null;
   isLoading: boolean;
   isEvaluating: boolean;
   isComplete: boolean;
@@ -25,10 +26,12 @@ interface UseInterviewReturn {
 export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
   const [session, setSession] = useState<InterviewSession | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
+  const [currentMcqOptions, setCurrentMcqOptions] = useState<string[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initialized = useRef(false);
 
   const fetchNextQuestion = useCallback(async (
     currentSession: InterviewSession,
@@ -51,6 +54,7 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
       if (!res.ok) throw new Error(data.error);
 
       setCurrentQuestion(data.question);
+      setCurrentMcqOptions(data.mcqOptions ?? null);
 
       const aiMessage: Message = {
         id: generateId(),
@@ -75,8 +79,11 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
     }
   }, []);
 
-  // Initialize session
+  // Initialize session — guard against React StrictMode double-invoke
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
     const initial: InterviewSession = {
       id: options.sessionId,
       candidateName: options.candidateName,
@@ -174,5 +181,5 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
     }
   }, [session, currentQuestion, fetchNextQuestion]);
 
-  return { session, currentQuestion, isLoading, isEvaluating, isComplete, submitAnswer, error };
+  return { session, currentQuestion, currentMcqOptions, isLoading, isEvaluating, isComplete, submitAnswer, error };
 }
