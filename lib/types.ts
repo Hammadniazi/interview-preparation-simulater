@@ -1,5 +1,10 @@
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 
+export interface GeneratedQuestion {
+  question: string;
+  mcqOptions?: string[]; // only for beginner difficulty
+}
+
 export type InterviewType =
   | 'technical'
   | 'behavioral'
