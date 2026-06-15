@@ -36,10 +36,11 @@ export default function ResumePage() {
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
       'text/plain': ['.txt'],
     },
     maxFiles: 1,
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 5 * 1024 * 1024,
   });
 
   const handleAnalyze = async () => {
@@ -173,14 +174,14 @@ export default function ResumePage() {
                               </p>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              Supports PDF, TXT up to 5MB
+                              Supports PDF, DOCX, TXT up to 5MB
                             </p>
                           </motion.div>
                         )}
                       </AnimatePresence>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 text-center">
-                      For best results with PDFs, copy-paste the text in the &ldquo;Paste Text&rdquo; tab.
+                      PDF, DOCX, and TXT files are all supported. For scanned PDFs, use the &ldquo;Paste Text&rdquo; tab.
                     </p>
                   </TabsContent>
 
