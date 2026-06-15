@@ -146,15 +146,13 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
       };
 
       if (nextIndex >= 10) {
-        // Interview complete
-        const allEvals = [...updatedSession.evaluations, evaluation];
+        // Interview complete — evaluations already includes the final answer via updatedSession
         const finalSession = {
           ...updatedSession,
-          evaluations: allEvals,
           status: 'completed' as const,
           completedAt: new Date(),
           overallScore: Math.round(
-            allEvals.reduce((s, e) => s + e.overallScore, 0) / allEvals.length
+            updatedSession.evaluations.reduce((s, e) => s + e.overallScore, 0) / updatedSession.evaluations.length
           ),
         };
         setSession(finalSession);
