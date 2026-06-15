@@ -32,20 +32,35 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch('/api/dashboard');
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
-        }
-      } catch {
-        // Use empty state if API fails
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchStats();
+    try {
+      const raw = localStorage.getItem('interviewai-sessions');
+      const sessions: SupabaseSession[] = raw ? JSON.parse(raw) : [];
+      const scores = sessions.map((s) => s.overall_score ?? 0);
+
+      setStats({
+        totalInterviews: sessions.length,
+        averageScore:
+          scores.length > 0
+            ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+            : 0,
+        bestScore: scores.length > 0 ? Math.max(...scores) : 0,
+        improvementRate: 0,
+        recentSessions: sessions.slice(0, 5),
+        scoreHistory: sessions.slice(0, 10).map((s) => ({
+          date: new Date(s.completed_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          }),
+          score: s.overall_score,
+          role: s.job_role,
+        })),
+        weakAreas: [],
+      });
+    } catch {
+      // keep empty state
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   const statCards = [

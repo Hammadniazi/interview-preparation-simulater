@@ -9,12 +9,16 @@ import {
   GeneratedQuestion,
 } from "./types";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+let _groq: Groq | null = null;
+function getGroq(): Groq {
+  if (!_groq) _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return _groq;
+}
 
 const MODEL = "llama-3.3-70b-versatile";
 
 async function generate(prompt: string): Promise<string> {
-  const res = await groq.chat.completions.create({
+  const res = await getGroq().chat.completions.create({
     model: MODEL,
     messages: [{ role: "user", content: prompt }],
     temperature: 0.7,
