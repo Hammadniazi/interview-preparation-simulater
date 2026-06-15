@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Play, Star } from 'lucide-react';
+import { ArrowRight, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -43,7 +43,7 @@ export function Hero() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6"
         >
-          Ace Your Next
+          Master Your Next
           <span className="block bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
             Job Interview
           </span>
@@ -77,10 +77,6 @@ export function Hero() {
               <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
-          <Button size="lg" variant="outline" className="gap-2 text-base px-8">
-            <Play className="w-4 h-4" />
-            Watch Demo
-          </Button>
         </motion.div>
 
         {/* Social Proof */}

@@ -43,7 +43,7 @@ export default function InterviewSetupPage() {
   const router = useRouter();
   const [candidateName, setCandidateName] = useState('');
   const [jobRole, setJobRole] = useState('');
-  const [difficulty, setDifficulty] = useState<Difficulty>('intermediate');
+  const [difficulty, setDifficulty] = useState<Difficulty>('beginner');
   const [interviewType, setInterviewType] = useState<InterviewType>('technical');
   const [isStarting, setIsStarting] = useState(false);
 
