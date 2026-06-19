@@ -6,7 +6,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?style=flat-square&logo=tailwindcss)
 ![Groq](https://img.shields.io/badge/Groq-LLaMA_3.3_70B-orange?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e?style=flat-square&logo=supabase)
 
 ---
 
@@ -33,6 +33,7 @@
 - **Styling** — [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
 - **Animations** — [Framer Motion](https://www.framer.com/motion/)
 - **AI** — [Groq](https://groq.com/) (LLaMA 3.3 70B Versatile)
+- **Database** — [Supabase](https://supabase.com/) (PostgreSQL — stores completed interview sessions)
 - **Charts** — [Recharts](https://recharts.org/)
 - **File Parsing** — [pdf-parse](https://www.npmjs.com/package/pdf-parse) + [mammoth](https://github.com/mwilliamson/mammoth.js)
 - **PDF Export** — [jsPDF](https://github.com/parallax/jsPDF) + [html2canvas](https://html2canvas.hertzen.com/)
@@ -45,6 +46,7 @@
 
 - Node.js 20+
 - A [Groq API key](https://console.groq.com) (free tier available)
+- A [Supabase](https://supabase.com) project (free tier available)
 
 ### 1. Clone the repository
 
@@ -59,21 +61,46 @@ cd interview-ai
 npm install
 ```
 
-### 3. Configure environment variables
+### 3. Set up Supabase
+
+1. Go to [supabase.com](https://supabase.com) and create a free project
+2. In the Supabase dashboard open **SQL Editor** and run the following:
+
+```sql
+CREATE TABLE interview_sessions (
+  id TEXT PRIMARY KEY,
+  candidate_name TEXT NOT NULL,
+  job_role TEXT NOT NULL,
+  difficulty TEXT NOT NULL,
+  interview_type TEXT NOT NULL,
+  overall_score INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'completed',
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE interview_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all" ON interview_sessions FOR ALL USING (true) WITH CHECK (true);
+```
+
+3. Copy your project URL and anon key from **Settings → API**
+
+### 4. Configure environment variables
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Open `.env.local` and add your Groq API key:
+Open `.env.local` and fill in your keys:
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
-> **Get a free key:** Go to [console.groq.com](https://console.groq.com) → Create API Key → Copy it.
-
-### 4. Run the development server
+### 5. Run the development server
 
 ```bash
 npm run dev
@@ -88,7 +115,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```
 interview-ai/
 ├── app/
-│   ├── api/                  # API routes (Groq, resume analysis)
+│   ├── api/                  # API routes (Groq AI, resume analysis)
 │   ├── dashboard/            # Analytics dashboard
 │   ├── interview/
 │   │   ├── setup/            # Interview configuration page
@@ -106,6 +133,7 @@ interview-ai/
 │   └── useInterview.ts       # Core interview session state
 └── lib/
     ├── gemini.ts             # Groq AI client & prompt functions
+    ├── supabase.ts           # Supabase client & database helpers
     ├── types.ts              # TypeScript types & constants
     └── utils.ts              # Helpers
 ```
@@ -118,17 +146,25 @@ interview-ai/
 
 1. Push your code to GitHub
 2. Import the repo at [vercel.com/new](https://vercel.com/new)
-3. Add your environment variable in **Settings → Environment Variables**:
-   - `GROQ_API_KEY` → your Groq API key
+3. Add the following environment variables in **Settings → Environment Variables**:
+
+| Variable                        | Value                         |
+| ------------------------------- | ----------------------------- |
+| `GROQ_API_KEY`                  | Your Groq API key             |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Your Supabase project URL     |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anon/public key |
+
 4. Deploy
 
 ---
 
 ## Environment Variables
 
-| Variable       | Required | Description                                            |
-| -------------- | -------- | ------------------------------------------------------ |
-| `GROQ_API_KEY` | ✅ Yes   | Groq API key for AI question generation and evaluation |
+| Variable                        | Required | Description                                            |
+| ------------------------------- | -------- | ------------------------------------------------------ |
+| `GROQ_API_KEY`                  | ✅ Yes   | Groq API key for AI question generation and evaluation |
+| `NEXT_PUBLIC_SUPABASE_URL`      | ✅ Yes   | Supabase project API URL                               |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ Yes   | Supabase anonymous key for client-side access          |
 
 ---
 

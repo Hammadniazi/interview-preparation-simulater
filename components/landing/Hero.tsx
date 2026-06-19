@@ -32,7 +32,7 @@ export function Hero() {
             className="gap-2 px-4 py-1.5 text-sm bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border border-violet-200 dark:border-violet-800"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            Powered by Google Gemini AI
+            Powered by Groq AI
           </Badge>
         </motion.div>
 
@@ -121,7 +121,7 @@ export function Hero() {
               </div>
               <div className="flex-1 mx-4">
                 <div className="bg-background/80 rounded-md px-3 py-1 text-xs text-muted-foreground text-center">
-                  interviewai.app/interview/session
+                  interviews-preparation-simulater.vercel.app/interview/session
                 </div>
               </div>
             </div>
