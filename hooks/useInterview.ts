@@ -20,6 +20,7 @@ interface UseInterviewReturn {
   isLoading: boolean;
   isEvaluating: boolean;
   isComplete: boolean;
+  isReportReady: boolean;
   submitAnswer: (answer: string) => Promise<void>;
   error: string | null;
 }
@@ -31,6 +32,7 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [isReportReady, setIsReportReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialized = useRef(false);
 
@@ -176,6 +178,7 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
         if (reportData.report && typeof window !== 'undefined') {
           sessionStorage.setItem(`report-${finalSession.id}`, JSON.stringify(reportData.report));
         }
+        setIsReportReady(true);
       } else {
         setSession(updatedSession);
         await fetchNextQuestion(updatedSession, nextIndex);
@@ -187,5 +190,5 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
     }
   }, [session, currentQuestion, fetchNextQuestion]);
 
-  return { session, currentQuestion, currentMcqOptions, isLoading, isEvaluating, isComplete, submitAnswer, error };
+  return { session, currentQuestion, currentMcqOptions, isLoading, isEvaluating, isComplete, isReportReady, submitAnswer, error };
 }

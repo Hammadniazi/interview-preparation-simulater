@@ -34,6 +34,7 @@ export default function InterviewSessionPage({ params }: PageProps) {
     isLoading,
     isEvaluating,
     isComplete,
+    isReportReady,
     submitAnswer,
     currentMcqOptions,
     error,
@@ -45,16 +46,13 @@ export default function InterviewSessionPage({ params }: PageProps) {
     interviewType,
   });
 
-  // Navigate to report when complete and report is ready
+  // Navigate to report only after report is saved to sessionStorage
   useEffect(() => {
-    if (isComplete && !reportFetched.current) {
+    if (isReportReady && !reportFetched.current) {
       reportFetched.current = true;
-      // Small delay to show completion message
-      setTimeout(() => {
-        router.push(`/report/${sessionId}?name=${encodeURIComponent(candidateName)}&role=${encodeURIComponent(jobRole)}`);
-      }, 3000);
+      router.push(`/report/${sessionId}?name=${encodeURIComponent(candidateName)}&role=${encodeURIComponent(jobRole)}`);
     }
-  }, [isComplete, sessionId, router, candidateName, jobRole]);
+  }, [isReportReady, sessionId, router, candidateName, jobRole]);
 
   if (error) {
     return (
@@ -205,9 +203,11 @@ export default function InterviewSessionPage({ params }: PageProps) {
               animate={{ opacity: 1, scale: 1 }}
               className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center"
             >
-              <div className="text-2xl mb-2">🎉</div>
+              <div className="text-2xl mb-2">{isReportReady ? '✅' : '🎉'}</div>
               <p className="font-semibold text-sm text-emerald-700 dark:text-emerald-400">Interview Complete!</p>
-              <p className="text-xs text-muted-foreground mt-1">Generating your report...</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isReportReady ? 'Redirecting to your report...' : 'Generating your report...'}
+              </p>
             </motion.div>
           )}
         </motion.div>
