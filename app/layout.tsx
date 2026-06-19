@@ -17,11 +17,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'InterviewAI - AI-Powered Interview Preparation',
-  description: 'Ace your next job interview with personalized AI coaching, instant feedback, and a 30-day learning roadmap.',
+  description: 'Master your next job interview with personalized AI coaching, instant feedback, and a 30-day learning roadmap.',
   keywords: ['interview preparation', 'AI interview', 'mock interview', 'job interview practice'],
   openGraph: {
     title: 'InterviewAI - AI-Powered Interview Preparation',
-    description: 'Ace your next job interview with personalized AI coaching.',
+    description: 'Master your next job interview with personalized AI coaching, instant feedback, and a 30-day learning roadmap.',
     type: 'website',
   },
 };
