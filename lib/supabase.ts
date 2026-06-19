@@ -1,14 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { InterviewSession } from './types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+let _supabase: ReturnType<typeof createClient> | null = null;
+function getSupabase() {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  return _supabase;
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Interview Sessions
 export async function saveInterviewSession(session: InterviewSession) {
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getSupabase() as any)
     .from('interview_sessions')
     .upsert({
       id: session.id,
@@ -28,7 +34,7 @@ export async function saveInterviewSession(session: InterviewSession) {
 }
 
 export async function getInterviewSession(sessionId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('interview_sessions')
     .select('*')
     .eq('id', sessionId)
@@ -39,7 +45,7 @@ export async function getInterviewSession(sessionId: string) {
 }
 
 export async function getAllSessions() {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('interview_sessions')
     .select('*')
     .eq('status', 'completed')
@@ -49,10 +55,8 @@ export async function getAllSessions() {
   return data || [];
 }
 
-
 export const supabaseSchema = `
 -- Run this in your Supabase SQL editor
--- Drop old table if it exists with wrong columns
 DROP TABLE IF EXISTS interview_sessions CASCADE;
 
 CREATE TABLE interview_sessions (
@@ -67,9 +71,7 @@ CREATE TABLE interview_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Enable RLS
 ALTER TABLE interview_sessions ENABLE ROW LEVEL SECURITY;
 
--- Allow all operations (no auth required for this app)
 CREATE POLICY "Allow all" ON interview_sessions FOR ALL USING (true) WITH CHECK (true);
 `;
