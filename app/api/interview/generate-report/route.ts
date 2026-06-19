@@ -25,15 +25,6 @@ export async function POST(req: NextRequest) {
       completedAt: session.completedAt ?? new Date(),
     };
 
-    // Try to save to Supabase (non-blocking, graceful fallback)
-    try {
-      const { saveInterviewSession, saveInterviewReport } = await import('@/lib/supabase');
-      await saveInterviewSession(session);
-      await saveInterviewReport(report);
-    } catch (dbError) {
-      console.warn('Supabase save failed (continuing without persistence):', dbError);
-    }
-
     return NextResponse.json({ report });
   } catch (error) {
     console.error('Error generating report:', error);
@@ -44,19 +35,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const sessionId = searchParams.get('sessionId');
-
-  if (!sessionId) {
-    return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
-  }
-
-  try {
-    const { getInterviewReport } = await import('@/lib/supabase');
-    const report = await getInterviewReport(sessionId);
-    return NextResponse.json({ report });
-  } catch {
-    return NextResponse.json({ error: 'Report not found' }, { status: 404 });
-  }
+export async function GET() {
+  return NextResponse.json({ error: 'Report not found' }, { status: 404 });
 }

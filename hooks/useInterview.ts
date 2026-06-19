@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { InterviewSession, Message, AnswerEvaluation, Difficulty, InterviewType } from '@/lib/types';
 import { generateId } from '@/lib/utils';
+import { saveInterviewSession } from '@/lib/supabase';
 
 interface UseInterviewOptions {
   sessionId: string;
@@ -158,21 +159,11 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
         setSession(finalSession);
         setIsComplete(true);
 
-        // Save to localStorage so the dashboard can display it
-        if (typeof window !== 'undefined') {
-          const sessionRecord = {
-            id: finalSession.id,
-            job_role: finalSession.jobRole,
-            difficulty: finalSession.difficulty,
-            interview_type: finalSession.interviewType,
-            overall_score: finalSession.overallScore ?? 0,
-            completed_at: new Date().toISOString(),
-            candidate_name: finalSession.candidateName,
-            status: 'completed',
-          };
-          const existing = JSON.parse(localStorage.getItem('interviewai-sessions') || '[]');
-          existing.unshift(sessionRecord);
-          localStorage.setItem('interviewai-sessions', JSON.stringify(existing.slice(0, 50)));
+        // Save session to Supabase
+        try {
+          await saveInterviewSession(finalSession);
+        } catch (err) {
+          console.error('Supabase save failed:', err);
         }
 
         // Generate report and store in sessionStorage for report page
