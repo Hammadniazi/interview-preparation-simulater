@@ -3,6 +3,15 @@
 import { motion } from 'framer-motion';
 import { Star, Quote } from 'lucide-react';
 
+const featured = {
+  name: 'Marcus Johnson',
+  role: 'Software Engineer at Meta',
+  avatar: 'MJ',
+  bg: 'from-blue-400 to-indigo-500',
+  content: 'I practiced for 2 weeks using InterviewAI before my Meta interviews. The system design questions were excellent and the personalized roadmap helped me fill critical gaps. I went in more confident than I\'ve ever felt.',
+  stars: 5,
+};
+
 const testimonials = [
   {
     name: 'Sarah Chen',
@@ -10,14 +19,6 @@ const testimonials = [
     avatar: 'SC',
     bg: 'from-violet-400 to-purple-500',
     content: 'InterviewAI helped me land my dream job at Google. The AI questions were surprisingly close to the actual interview, and the feedback was incredibly detailed and actionable.',
-    stars: 5,
-  },
-  {
-    name: 'Marcus Johnson',
-    role: 'Software Engineer at Meta',
-    avatar: 'MJ',
-    bg: 'from-blue-400 to-indigo-500',
-    content: 'I practiced for 2 weeks using InterviewAI before my Meta interviews. The system design questions were excellent and the personalized roadmap helped me fill critical gaps.',
     stars: 5,
   },
   {
@@ -33,7 +34,7 @@ const testimonials = [
     role: 'Backend Developer at Stripe',
     avatar: 'DK',
     bg: 'from-orange-400 to-red-500',
-    content: 'Went from bombing interviews to 3 offers in 6 weeks. The real-time scoring and specific feedback on each answer made all the difference in my preparation.',
+    content: 'Went from bombing interviews to 3 offers in 6 weeks. The real-time scoring and specific feedback on each answer made all the difference.',
     stars: 5,
   },
   {
@@ -53,6 +54,16 @@ const testimonials = [
     stars: 5,
   },
 ];
+
+function StarRating({ count }: { count: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: count }).map((_, i) => (
+        <Star key={i} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+      ))}
+    </div>
+  );
+}
 
 export function Testimonials() {
   return (
@@ -77,7 +88,32 @@ export function Testimonials() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Featured testimonial */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="relative p-8 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-indigo-500/5 mb-6"
+        >
+          <Quote className="w-10 h-10 text-violet-500/20 absolute top-6 right-6" />
+          <StarRating count={featured.stars} />
+          <p className="text-base sm:text-lg leading-relaxed text-foreground mt-4 mb-6 max-w-3xl">
+            &ldquo;{featured.content}&rdquo;
+          </p>
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${featured.bg} flex items-center justify-center text-white text-sm font-bold`}>
+              {featured.avatar}
+            </div>
+            <div>
+              <div className="font-semibold text-sm">{featured.name}</div>
+              <div className="text-xs text-muted-foreground">{featured.role}</div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Grid of remaining testimonials */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 xl:grid-cols-5 xl:gap-4">
           {testimonials.map((t, index) => (
             <motion.div
               key={t.name}
@@ -85,24 +121,20 @@ export function Testimonials() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.07 }}
-              className="relative p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm hover:border-violet-500/30 hover:shadow-lg transition-all duration-300"
+              className="relative p-5 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm hover:border-violet-500/30 hover:shadow-md transition-all duration-300 flex flex-col"
             >
-              <Quote className="w-8 h-8 text-violet-600/20 absolute top-4 right-4" />
-              <div className="flex items-center gap-1 mb-4">
-                {Array.from({ length: t.stars }).map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                ))}
-              </div>
-              <p className="text-sm leading-relaxed text-muted-foreground mb-6">
+              <Quote className="w-6 h-6 text-violet-600/15 absolute top-4 right-4" />
+              <StarRating count={t.stars} />
+              <p className="text-sm leading-relaxed text-muted-foreground my-4 flex-1">
                 &ldquo;{t.content}&rdquo;
               </p>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${t.bg} flex items-center justify-center text-white text-sm font-bold`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${t.bg} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                   {t.avatar}
                 </div>
                 <div>
-                  <div className="font-semibold text-sm">{t.name}</div>
-                  <div className="text-xs text-muted-foreground">{t.role}</div>
+                  <div className="font-semibold text-xs">{t.name}</div>
+                  <div className="text-xs text-muted-foreground leading-tight">{t.role}</div>
                 </div>
               </div>
             </motion.div>

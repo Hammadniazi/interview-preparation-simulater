@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { InterviewSession } from './types';
+import { InterviewSession, InterviewReport } from './types';
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -44,6 +44,27 @@ export async function getInterviewSession(sessionId: string) {
   return data;
 }
 
+export async function saveReport(sessionId: string, report: InterviewReport) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (getSupabase() as any)
+    .from('interview_sessions')
+    .update({ report })
+    .eq('id', sessionId);
+  if (error) throw error;
+}
+
+export async function getReport(sessionId: string): Promise<InterviewReport | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getSupabase() as any)
+    .from('interview_sessions')
+    .select('report')
+    .eq('id', sessionId)
+    .single();
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any)?.report ?? null;
+}
+
 export async function getAllSessions() {
   const { data, error } = await getSupabase()
     .from('interview_sessions')
@@ -67,6 +88,7 @@ CREATE TABLE interview_sessions (
   interview_type TEXT NOT NULL,
   overall_score INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'completed',
+  report JSONB,
   completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -74,4 +96,7 @@ CREATE TABLE interview_sessions (
 ALTER TABLE interview_sessions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow all" ON interview_sessions FOR ALL USING (true) WITH CHECK (true);
+
+-- If you already have the table, run this migration instead:
+-- ALTER TABLE interview_sessions ADD COLUMN IF NOT EXISTS report JSONB;
 `;

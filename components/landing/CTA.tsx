@@ -51,7 +51,7 @@ export function CTA() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="border-white/30 text-white hover:bg-white/10 hover:border-white/50 gap-2 text-base px-8"
+                  className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:border-white/50 hover:text-white gap-2 text-base px-8"
                 >
                   View Dashboard
                 </Button>
