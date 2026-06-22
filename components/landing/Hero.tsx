@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Star } from 'lucide-react';
+import { ArrowRight, Sparkles, Star, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -55,36 +55,18 @@ export function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10"
+          className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
         >
           Practice with an AI interviewer that adapts to your role and skill level.
           Get instant feedback, detailed scoring, and a personalized 30-day roadmap.
         </motion.p>
 
-        {/* CTA Buttons */}
+        {/* Social Proof — near the headline where it converts */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
-        >
-          <Link href="/interview/setup">
-            <Button
-              size="lg"
-              className="gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/25 text-base px-8"
-            >
-              Start Free Practice
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-        </motion.div>
-
-        {/* Social Proof */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground"
+          transition={{ duration: 0.6, delay: 0.25 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-5 mb-10 text-sm text-muted-foreground"
         >
           <div className="flex items-center gap-2">
             <div className="flex -space-x-2">
@@ -96,12 +78,43 @@ export function Hero() {
             </div>
             <span>10,000+ interviews practiced</span>
           </div>
-          <div className="flex items-center gap-1">
-            {[1,2,3,4,5].map(i => (
-              <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-            ))}
-            <span className="ml-1">4.9/5 rating</span>
+          <div className="hidden sm:block w-px h-4 bg-border" />
+          <div className="flex items-center gap-1.5">
+            <div className="flex">
+              {[1,2,3,4,5].map(i => (
+                <Star key={i} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+              ))}
+            </div>
+            <span>4.9/5 from 2,000+ reviews</span>
           </div>
+        </motion.div>
+
+        {/* CTA Buttons */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-20"
+        >
+          <Link href="/interview/setup">
+            <Button
+              size="lg"
+              className="gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/25 text-base px-8"
+            >
+              Start Free Practice
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Link href="/dashboard">
+            <Button
+              size="lg"
+              variant="outline"
+              className="gap-2 text-base px-8"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              View Dashboard
+            </Button>
+          </Link>
         </motion.div>
 
         {/* Demo Card */}
@@ -109,7 +122,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 40, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.5 }}
-          className="mt-20 max-w-4xl mx-auto"
+          className="max-w-4xl mx-auto"
         >
           <div className="relative rounded-2xl border border-border/50 bg-gradient-to-b from-background to-muted/30 shadow-2xl overflow-hidden">
             {/* Browser chrome */}
@@ -121,7 +134,7 @@ export function Hero() {
               </div>
               <div className="flex-1 mx-4">
                 <div className="bg-background/80 rounded-md px-3 py-1 text-xs text-muted-foreground text-center">
-                  interviews-preparation-simulater.vercel.app/interview/session
+                  interview-ai.vercel.app/interview/session
                 </div>
               </div>
             </div>

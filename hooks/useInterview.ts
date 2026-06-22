@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { InterviewSession, Message, AnswerEvaluation, Difficulty, InterviewType } from '@/lib/types';
 import { generateId } from '@/lib/utils';
-import { saveInterviewSession } from '@/lib/supabase';
+import { saveInterviewSession, saveReport } from '@/lib/supabase';
 
 interface UseInterviewOptions {
   sessionId: string;
@@ -175,8 +175,15 @@ export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
           body: JSON.stringify({ session: finalSession }),
         });
         const reportData = await reportRes.json();
-        if (reportData.report && typeof window !== 'undefined') {
-          sessionStorage.setItem(`report-${finalSession.id}`, JSON.stringify(reportData.report));
+        if (reportData.report) {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(`report-${finalSession.id}`, JSON.stringify(reportData.report));
+          }
+          try {
+            await saveReport(finalSession.id, reportData.report);
+          } catch (err) {
+            console.error('Failed to save report to Supabase:', err);
+          }
         }
         setIsReportReady(true);
       } else {
