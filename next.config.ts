@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [],
   },
-  serverExternalPackages: ['pdf-parse', 'mammoth', 'pdfjs-dist'],
+  serverExternalPackages: ['pdf-parse', 'mammoth'],
 };
 
 export default nextConfig;
