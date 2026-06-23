@@ -21,10 +21,10 @@ export function formatTime(date: Date | string): string {
 }
 
 export function getScoreColor(score: number): string {
-  if (score >= 80) return 'text-emerald-500';
-  if (score >= 60) return 'text-yellow-500';
-  if (score >= 40) return 'text-orange-500';
-  return 'text-red-500';
+  if (score >= 80) return 'text-emerald-600 dark:text-emerald-400';
+  if (score >= 60) return 'text-amber-600 dark:text-amber-400';
+  if (score >= 40) return 'text-orange-600 dark:text-orange-400';
+  return 'text-red-600 dark:text-red-400';
 }
 
 export function getScoreBg(score: number): string {

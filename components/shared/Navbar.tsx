@@ -28,7 +28,7 @@ export function Navbar() {
       className={cn(
         'fixed top-0 left-0 right-0 z-50 border-b transition-all duration-300',
         isLanding
-          ? 'bg-background/60 backdrop-blur-xl border-border/50'
+          ? 'bg-background/85 backdrop-blur-xl border-border/50'
           : 'bg-background/95 backdrop-blur-sm border-border'
       )}
     >
@@ -49,11 +49,13 @@ export function Navbar() {
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href}>
                 <Button
-                  variant={pathname.startsWith(href) ? 'secondary' : 'ghost'}
+                  variant="ghost"
                   size="sm"
                   className={cn(
-                    'gap-2',
-                    pathname.startsWith(href) && 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
+                    'gap-2 text-foreground/80 hover:text-foreground',
+                    pathname.startsWith(href)
+                      ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 hover:text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 dark:hover:text-violet-200'
+                      : 'hover:bg-accent'
                   )}
                 >
                   <Icon className="w-4 h-4" />
@@ -97,10 +99,12 @@ export function Navbar() {
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
                 <Button
-                  variant={pathname.startsWith(href) ? 'secondary' : 'ghost'}
+                  variant="ghost"
                   className={cn(
-                    'w-full justify-start gap-2',
-                    pathname.startsWith(href) && 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
+                    'w-full justify-start gap-2 text-foreground/80 hover:text-foreground',
+                    pathname.startsWith(href)
+                      ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 hover:text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 dark:hover:text-violet-200'
+                      : 'hover:bg-accent'
                   )}
                 >
                   <Icon className="w-4 h-4" />
