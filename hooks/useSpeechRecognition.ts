@@ -2,13 +2,47 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-declare global {
-  interface Window {
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
+// Use a local interface so we never reference the global SpeechRecognition
+// type that Next.js's build worker fails to resolve even with lib:["dom"].
+interface Recognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: RecognitionEvent) => void) | null;
+  onerror: ((event: RecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
 }
 
-interface UseSpeechRecognitionReturn {
+interface RecognitionResult {
+  readonly isFinal: boolean;
+  readonly length: number;
+  item(index: number): { transcript: string };
+  [index: number]: { transcript: string };
+}
+
+interface RecognitionEvent extends Event {
+  readonly resultIndex: number;
+  readonly results: { length: number; item(i: number): RecognitionResult; [i: number]: RecognitionResult };
+}
+
+interface RecognitionErrorEvent extends Event {
+  readonly error: string;
+}
+
+type RecognitionConstructor = new () => Recognition;
+
+function getRecognitionClass(): RecognitionConstructor | null {
+  if (typeof window === 'undefined') return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
+
+export interface UseSpeechRecognitionReturn {
   isListening: boolean;
   isSupported: boolean;
   interimTranscript: string;
@@ -19,9 +53,10 @@ interface UseSpeechRecognitionReturn {
 /**
  * Wraps the Web Speech API for continuous voice-to-text input.
  *
- * - Fires `onFinalTranscript` each time a sentence is confirmed
- * - `interimTranscript` holds the in-progress phrase for live preview
- * - Auto-restarts transparently when Chrome ends the session after silence
+ * - Fires `onFinalTranscript` each time a sentence is confirmed.
+ * - `interimTranscript` holds the in-progress phrase for live preview.
+ * - Auto-restarts when Chrome silently ends the session after ~60 s of
+ *   silence (happens even with continuous:true).
  */
 export function useSpeechRecognition(
   onFinalTranscript: (text: string) => void
@@ -30,25 +65,22 @@ export function useSpeechRecognition(
   const [isSupported, setIsSupported] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<Recognition | null>(null);
   const shouldRestartRef = useRef(false);
-  // Stable ref so closures inside recognition callbacks always call the latest version
   const callbackRef = useRef(onFinalTranscript);
   const startSessionRef = useRef<() => void>(() => {});
 
+  // Keep callback ref current without triggering recognition restarts
   useEffect(() => {
     callbackRef.current = onFinalTranscript;
   });
 
   useEffect(() => {
-    setIsSupported(
-      typeof window !== 'undefined' &&
-        !!(window.SpeechRecognition || window.webkitSpeechRecognition)
-    );
+    setIsSupported(getRecognitionClass() !== null);
   }, []);
 
   const startSession = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SR = getRecognitionClass();
     if (!SR) return;
 
     const rec = new SR();
@@ -57,7 +89,7 @@ export function useSpeechRecognition(
     rec.lang = 'en-US';
     rec.maxAlternatives = 1;
 
-    rec.onresult = (event: SpeechRecognitionEvent) => {
+    rec.onresult = (event: RecognitionEvent) => {
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const text = event.results[i][0].transcript;
@@ -70,8 +102,8 @@ export function useSpeechRecognition(
       setInterimTranscript(interim);
     };
 
-    rec.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // no-speech = expected silence; audio-capture = mic not ready yet — not real errors
+    rec.onerror = (event: RecognitionErrorEvent) => {
+      // no-speech = expected silence; audio-capture = mic warmup — not real errors
       if (event.error === 'no-speech' || event.error === 'audio-capture') return;
       shouldRestartRef.current = false;
       setIsListening(false);
@@ -81,8 +113,7 @@ export function useSpeechRecognition(
     rec.onend = () => {
       setInterimTranscript('');
       if (shouldRestartRef.current) {
-        // Chrome ends the session after ~60 s of silence even with continuous:true.
-        // Restart transparently so the user never notices.
+        // Chrome ends the session after ~60 s of silence; restart transparently
         startSessionRef.current();
       } else {
         setIsListening(false);
@@ -93,17 +124,16 @@ export function useSpeechRecognition(
     try {
       rec.start();
     } catch {
-      // Another instance may already be running; ignore the error
+      // Swallow "already started" errors from rapid toggles
     }
   }, []);
 
-  // Keep the ref pointing at the latest startSession
   useEffect(() => {
     startSessionRef.current = startSession;
   }, [startSession]);
 
   const startListening = useCallback(() => {
-    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) return;
+    if (!getRecognitionClass()) return;
     shouldRestartRef.current = true;
     setIsListening(true);
     startSession();
