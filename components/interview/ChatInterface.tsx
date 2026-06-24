@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Mic, MicOff, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { AIAvatar } from './AIAvatar';
 import { Message } from '@/lib/types';
 import { formatTime } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -36,11 +37,23 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const [answer, setAnswer] = useState('');
   const [selectedMcq, setSelectedMcq] = useState<number | null>(null);
-  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isProcessing = isLoading || isEvaluating;
   const isMcq = !!(mcqOptions && mcqOptions.length === 4);
+
+  // Each confirmed speech sentence is appended to the answer box
+  const handleFinalTranscript = useCallback((text: string) => {
+    setAnswer(prev => (prev ? prev + ' ' : '') + text);
+  }, []);
+
+  const { isListening, isSupported, interimTranscript, startListening, stopListening } =
+    useSpeechRecognition(handleFinalTranscript);
+
+  // Stop mic when interview ends or switches to MCQ (no free-text needed)
+  useEffect(() => {
+    if ((isComplete || isMcq) && isListening) stopListening();
+  }, [isComplete, isMcq, isListening, stopListening]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -48,7 +61,6 @@ export function ChatInterface({
     }
   }, [messages, isLoading]);
 
-  // Reset MCQ selection when new question arrives
   useEffect(() => {
     setSelectedMcq(null);
   }, [mcqOptions]);
@@ -61,8 +73,10 @@ export function ChatInterface({
       onSubmitAnswer(`${label}) ${mcqOptions![selectedMcq]}`);
       setSelectedMcq(null);
     } else {
-      if (!answer.trim()) return;
-      onSubmitAnswer(answer.trim());
+      const trimmed = answer.trim();
+      if (!trimmed) return;
+      if (isListening) stopListening();
+      onSubmitAnswer(trimmed);
       setAnswer('');
       textareaRef.current?.focus();
     }
@@ -81,12 +95,8 @@ export function ChatInterface({
   };
 
   const toggleListening = () => {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert('Speech recognition is not supported in your browser.');
-      return;
-    }
-    // Voice input placeholder
-    setIsListening(!isListening);
+    if (!isSupported) return;
+    isListening ? stopListening() : startListening();
   };
 
   return (
@@ -111,7 +121,6 @@ export function ChatInterface({
       {/* Messages */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef as React.RefObject<HTMLDivElement>}>
         <div className="space-y-4 max-w-3xl mx-auto">
-          {/* Welcome message */}
           {messages.length === 0 && !isLoading && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -137,7 +146,6 @@ export function ChatInterface({
                   message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
                 )}
               >
-                {/* Avatar */}
                 {message.role === 'assistant' ? (
                   <div className="shrink-0 mt-1">
                     <AIAvatar size="sm" />
@@ -148,7 +156,6 @@ export function ChatInterface({
                   </div>
                 )}
 
-                {/* Bubble */}
                 <div className={cn(
                   'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
                   message.role === 'assistant'
@@ -167,7 +174,6 @@ export function ChatInterface({
             ))}
           </AnimatePresence>
 
-          {/* Loading indicators */}
           {isLoading && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -225,7 +231,6 @@ export function ChatInterface({
         <div className="p-4 border-t border-border/50 bg-background/50 backdrop-blur-sm">
           <div className="max-w-3xl mx-auto">
             {isMcq ? (
-              /* MCQ mode: clickable option buttons */
               <div className="space-y-2">
                 {mcqOptions!.map((option, index) => (
                   <motion.button
@@ -264,31 +269,63 @@ export function ChatInterface({
                 </Button>
               </div>
             ) : (
-              /* Open-ended mode: textarea */
-              <>
+              <div className="space-y-2">
+                {/* Textarea + action buttons */}
                 <div className="relative flex gap-2">
                   <Textarea
                     ref={textareaRef}
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={isLoading ? 'Waiting for question...' : 'Type your answer... (Press Enter to submit, Shift+Enter for new line)'}
-                    className="min-h-[80px] max-h-[200px] resize-none pr-24 text-sm"
+                    placeholder={
+                      isListening
+                        ? 'Speak now — your words will appear here...'
+                        : isLoading
+                        ? 'Waiting for question...'
+                        : 'Type your answer... (Enter to submit, Shift+Enter for new line)'
+                    }
+                    className={cn(
+                      'min-h-[80px] max-h-[200px] resize-none pr-24 text-sm transition-colors',
+                      isListening && 'border-red-400 dark:border-red-500 focus-visible:ring-red-400'
+                    )}
                     disabled={isProcessing}
                   />
                   <div className="absolute right-2 bottom-2 flex gap-1.5">
+                    {/* Mic button */}
                     <Button
                       size="icon"
                       variant="ghost"
                       onClick={toggleListening}
+                      disabled={!isSupported || isProcessing}
+                      title={
+                        !isSupported
+                          ? 'Voice input requires Chrome or Edge'
+                          : isListening
+                          ? 'Stop recording'
+                          : 'Start voice input'
+                      }
                       className={cn(
-                        'h-8 w-8',
-                        isListening && 'text-red-500 bg-red-500/10'
+                        'h-8 w-8 transition-all',
+                        isListening
+                          ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20 hover:text-red-600'
+                          : !isSupported
+                          ? 'opacity-30 cursor-not-allowed'
+                          : ''
                       )}
-                      title="Voice input"
                     >
-                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      {isListening ? (
+                        <motion.div
+                          animate={{ scale: [1, 1.15, 1] }}
+                          transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                        >
+                          <MicOff className="w-4 h-4" />
+                        </motion.div>
+                      ) : (
+                        <Mic className="w-4 h-4" />
+                      )}
                     </Button>
+
+                    {/* Send button */}
                     <Button
                       size="icon"
                       onClick={handleSubmit}
@@ -299,11 +336,46 @@ export function ChatInterface({
                     </Button>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  <AlertCircle className="w-3 h-3 inline mr-1" />
-                  Be thorough and specific. The AI evaluates depth, clarity, and relevance.
-                </p>
-              </>
+
+                {/* Live listening indicator + interim transcript */}
+                <AnimatePresence>
+                  {isListening && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex items-center gap-2 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-lg overflow-hidden"
+                    >
+                      <motion.div
+                        className="w-2 h-2 rounded-full bg-red-500 shrink-0"
+                        animate={{ opacity: [1, 0.3, 1] }}
+                        transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                      />
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400 shrink-0">
+                        Listening
+                      </span>
+                      {interimTranscript ? (
+                        <span className="text-xs text-muted-foreground italic truncate">
+                          &ldquo;{interimTranscript}&rdquo;
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Say your answer aloud...
+                        </span>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Hint text */}
+                {!isListening && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    <AlertCircle className="w-3 h-3 inline mr-1" />
+                    Be thorough and specific. The AI evaluates depth, clarity, and relevance.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
