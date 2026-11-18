@@ -1,42 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { generateInterviewQuestion } from '@/lib/gemini';
-import { Difficulty, InterviewType } from '@/lib/types';
+import { NextResponse, type NextRequest } from 'next/server';
+import { generateInterviewQuestion } from '@/lib/ai';
+import { badRequest, errorResponse, text } from '@/lib/api';
+import { isDifficulty, isInterviewType, TOTAL_QUESTIONS } from '@/lib/types';
 
 export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const jobRole = text(body?.jobRole, 100);
+  const { difficulty, interviewType } = body ?? {};
+  const questionIndex = Number(body?.questionIndex ?? 0);
+  const previousQuestions: string[] = Array.isArray(body?.previousQuestions)
+    ? body.previousQuestions.filter((q: unknown) => typeof q === 'string').slice(0, TOTAL_QUESTIONS).map((q: string) => q.slice(0, 600))
+    : [];
+
+  if (!jobRole || !isDifficulty(difficulty) || !isInterviewType(interviewType)) {
+    return badRequest('Missing or invalid interview settings.');
+  }
+  if (!Number.isInteger(questionIndex) || questionIndex < 0 || questionIndex >= TOTAL_QUESTIONS) {
+    return badRequest('Invalid question index.');
+  }
+
   try {
-    const { jobRole, difficulty, interviewType, questionIndex, previousQuestions } = await req.json();
-
-    if (!jobRole || !difficulty || !interviewType) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    const generated = await generateInterviewQuestion(
-      jobRole,
-      difficulty as Difficulty,
-      interviewType as InterviewType,
-      questionIndex ?? 0,
-      previousQuestions ?? []
-    );
-
-    return NextResponse.json(generated);
-  } catch (error) {
-    console.error('Error generating question:', error);
-    const message = String(error);
-    if (message.includes('429') || message.includes('rate_limit')) {
-      return NextResponse.json(
-        { error: 'Rate limit reached. Please wait a moment and try again.' },
-        { status: 429 }
-      );
-    }
-    if (message.includes('401') || message.includes('api_key') || message.includes('Authentication')) {
-      return NextResponse.json(
-        { error: 'Invalid API key. Please check your GROQ_API_KEY in .env.local' },
-        { status: 401 }
-      );
-    }
-    return NextResponse.json(
-      { error: 'Failed to generate question. Please check your GROQ_API_KEY in .env.local' },
-      { status: 500 }
-    );
+    const q = await generateInterviewQuestion(jobRole, difficulty, interviewType, questionIndex, previousQuestions);
+    return NextResponse.json(q);
+  } catch (err) {
+    return errorResponse(err, 'generate the next question');
   }
 }

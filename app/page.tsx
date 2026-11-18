@@ -1,7 +1,7 @@
 import { Hero } from '@/components/landing/Hero';
-import { Features } from '@/components/landing/Features';
 import { HowItWorks } from '@/components/landing/HowItWorks';
-import { Testimonials } from '@/components/landing/Testimonials';
+import { Features } from '@/components/landing/Features';
+import { FAQ } from '@/components/landing/FAQ';
 import { CTA } from '@/components/landing/CTA';
 import { Footer } from '@/components/shared/Footer';
 
@@ -9,9 +9,9 @@ export default function HomePage() {
   return (
     <>
       <Hero />
-      <Features />
       <HowItWorks />
-      <Testimonials />
+      <Features />
+      <FAQ />
       <CTA />
       <Footer />
     </>

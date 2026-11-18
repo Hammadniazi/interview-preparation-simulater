@@ -1,64 +1,74 @@
 'use client';
 
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Area, AreaChart, Legend
-} from 'recharts';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useThemeColors } from '@/hooks/useThemeColors';
 
-interface ScoreChartProps {
-  data: { date: string; score: number; role: string }[];
+interface Point {
+  label: string;
+  score: number;
+  role: string;
 }
 
-export function ScoreChart({ data }: ScoreChartProps) {
-  if (data.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
-        No interview data yet. Complete your first interview to see trends.
-      </div>
-    );
-  }
+const TOKENS = ['chart-1', 'chart-grid', 'muted-foreground', 'surface', 'border', 'foreground'] as const;
+
+export function ScoreChart({ data }: { data: Point[] }) {
+  const c = useThemeColors(TOKENS);
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-        <defs>
-          <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-        <XAxis
-          dataKey="date"
-          tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          domain={[0, 100]}
-          tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          contentStyle={{
-            background: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: '8px',
-            fontSize: '12px',
-          }}
-          formatter={(value) => [`${value}/100`, 'Score']}
-        />
-        <Area
-          type="monotone"
-          dataKey="score"
-          stroke="#7c3aed"
-          strokeWidth={2.5}
-          fill="url(#scoreGrad)"
-          dot={{ fill: '#7c3aed', r: 4, strokeWidth: 0 }}
-          activeDot={{ r: 6, fill: '#7c3aed' }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <figure>
+      <div className="h-56" aria-hidden>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+            <defs>
+              <linearGradient id="score-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={c['chart-1']} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={c['chart-1']} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke={c['chart-grid']} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: c['muted-foreground'] }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+              minTickGap={24}
+            />
+            <YAxis
+              domain={[0, 100]}
+              ticks={[0, 50, 100]}
+              tick={{ fontSize: 11, fill: c['muted-foreground'] }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              cursor={{ stroke: c.border }}
+              contentStyle={{
+                background: c.surface,
+                border: `1px solid ${c.border}`,
+                borderRadius: 10,
+                fontSize: 12,
+                color: c.foreground,
+              }}
+              labelStyle={{ color: c['muted-foreground'] }}
+              formatter={(value, _name, item) => [`${value}/100`, (item?.payload as Point | undefined)?.role ?? 'Score']}
+            />
+            <Area
+              type="monotone"
+              dataKey="score"
+              stroke={c['chart-1']}
+              strokeWidth={2}
+              fill="url(#score-fill)"
+              dot={{ r: 3, fill: c['chart-1'], strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: c['chart-1'], strokeWidth: 0 }}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <figcaption className="sr-only">
+        Scores over time: {data.map((d) => `${d.label} ${d.score}`).join(', ')}.
+      </figcaption>
+    </figure>
   );
 }

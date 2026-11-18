@@ -1,16 +1,22 @@
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 
-export interface GeneratedQuestion {
-  question: string;
-  mcqOptions?: string[]; // only for beginner difficulty
+export type InterviewType = 'technical' | 'behavioral' | 'system-design' | 'mixed' | 'hr';
+
+export const DIFFICULTIES: readonly Difficulty[] = ['beginner', 'intermediate', 'advanced', 'expert'];
+export const INTERVIEW_TYPES: readonly InterviewType[] = ['technical', 'behavioral', 'system-design', 'mixed', 'hr'];
+
+export const TOTAL_QUESTIONS = 10;
+
+/** Multiple-choice payload (beginner sessions only). */
+export interface McqQuestion {
+  options: string[];
+  correctIndex: number;
 }
 
-export type InterviewType =
-  | 'technical'
-  | 'behavioral'
-  | 'system-design'
-  | 'mixed'
-  | 'hr';
+export interface GeneratedQuestion {
+  question: string;
+  mcq?: McqQuestion;
+}
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -18,7 +24,7 @@ export interface Message {
   id: string;
   role: MessageRole;
   content: string;
-  timestamp: Date;
+  timestamp: string; // ISO — keeps sessions JSON-serialisable
 }
 
 export interface ScoreBreakdown {
@@ -27,6 +33,13 @@ export interface ScoreBreakdown {
   relevance: number;
   confidence: number;
 }
+
+export const SCORE_DIMENSIONS: { key: keyof ScoreBreakdown; label: string; short: string }[] = [
+  { key: 'technicalKnowledge', label: 'Technical knowledge', short: 'Technical' },
+  { key: 'communication', label: 'Communication', short: 'Communication' },
+  { key: 'relevance', label: 'Relevance', short: 'Relevance' },
+  { key: 'confidence', label: 'Confidence', short: 'Confidence' },
+];
 
 export interface AnswerEvaluation {
   questionIndex: number;
@@ -37,21 +50,20 @@ export interface AnswerEvaluation {
   overallScore: number;
 }
 
-export interface InterviewSession {
-  id: string;
+export interface InterviewConfig {
+  sessionId: string;
   candidateName: string;
   jobRole: string;
   difficulty: Difficulty;
   interviewType: InterviewType;
-  status: 'active' | 'completed' | 'abandoned';
-  currentQuestionIndex: number;
-  questions: string[];
-  messages: Message[];
-  evaluations: AnswerEvaluation[];
-  startedAt: Date;
-  completedAt?: Date;
-  overallScore?: number;
-  createdAt: Date;
+}
+
+export interface LearningWeek {
+  week: number;
+  title: string;
+  topics: string[];
+  resources: string[];
+  goal: string;
 }
 
 export interface InterviewReport {
@@ -68,15 +80,7 @@ export interface InterviewReport {
   recommendations: string[];
   learningRoadmap: LearningWeek[];
   evaluations: AnswerEvaluation[];
-  completedAt: Date;
-}
-
-export interface LearningWeek {
-  week: number;
-  title: string;
-  topics: string[];
-  resources: string[];
-  goal: string;
+  completedAt: string;
 }
 
 export interface ResumeAnalysis {
@@ -88,25 +92,16 @@ export interface ResumeAnalysis {
   improvements: string[];
 }
 
-export interface SupabaseSession {
+/** Compact row used by the dashboard / history list. */
+export interface SessionSummary {
   id: string;
-  job_role: string;
-  difficulty: string;
-  interview_type: string;
-  overall_score: number;
-  completed_at: string;
-  candidate_name: string;
-  status: string;
-}
-
-export interface DashboardStats {
-  totalInterviews: number;
-  averageScore: number;
-  bestScore: number;
-  improvementRate: number;
-  recentSessions: SupabaseSession[];
-  scoreHistory: { date: string; score: number; role: string }[];
-  weakAreas: { area: string; score: number }[];
+  candidateName: string;
+  jobRole: string;
+  difficulty: Difficulty;
+  interviewType: InterviewType;
+  overallScore: number;
+  scoreBreakdown: ScoreBreakdown | null;
+  completedAt: string;
 }
 
 export const JOB_ROLES = [
@@ -139,10 +134,33 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   expert: 'Expert',
 };
 
+export const DIFFICULTY_HINTS: Record<Difficulty, string> = {
+  beginner: 'Multiple choice, fundamentals',
+  intermediate: 'Open answers, practical',
+  advanced: 'Senior depth, trade-offs',
+  expert: 'Architecture & leadership',
+};
+
 export const INTERVIEW_TYPE_LABELS: Record<InterviewType, string> = {
   technical: 'Technical',
   behavioral: 'Behavioral',
-  'system-design': 'System Design',
+  'system-design': 'System design',
   mixed: 'Mixed',
-  hr: 'HR / Culture Fit',
+  hr: 'HR / culture fit',
 };
+
+export const INTERVIEW_TYPE_HINTS: Record<InterviewType, string> = {
+  technical: 'Problem solving, debugging, tooling',
+  behavioral: 'Past situations, STAR answers',
+  'system-design': 'Architecture and scaling',
+  mixed: 'Alternates technical and behavioral',
+  hr: 'Motivation, values, soft skills',
+};
+
+export function isDifficulty(v: unknown): v is Difficulty {
+  return typeof v === 'string' && (DIFFICULTIES as readonly string[]).includes(v);
+}
+
+export function isInterviewType(v: unknown): v is InterviewType {
+  return typeof v === 'string' && (INTERVIEW_TYPES as readonly string[]).includes(v);
+}

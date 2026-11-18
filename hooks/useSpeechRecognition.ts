@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useSyncExternalStore } from 'react';
 
 // Use a local interface so we never reference the global SpeechRecognition
 // type that Next.js's build worker fails to resolve even with lib:["dom"].
@@ -35,6 +35,8 @@ interface RecognitionErrorEvent extends Event {
 
 type RecognitionConstructor = new () => Recognition;
 
+const noopSubscribe = () => () => {};
+
 function getRecognitionClass(): RecognitionConstructor | null {
   if (typeof window === 'undefined') return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,7 +64,11 @@ export function useSpeechRecognition(
   onFinalTranscript: (text: string) => void
 ): UseSpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+  const isSupported = useSyncExternalStore(
+    noopSubscribe,
+    () => getRecognitionClass() !== null,
+    () => false,
+  );
   const [interimTranscript, setInterimTranscript] = useState('');
 
   const recognitionRef = useRef<Recognition | null>(null);
@@ -74,10 +80,6 @@ export function useSpeechRecognition(
   useEffect(() => {
     callbackRef.current = onFinalTranscript;
   });
-
-  useEffect(() => {
-    setIsSupported(getRecognitionClass() !== null);
-  }, []);
 
   const startSession = useCallback(() => {
     const SR = getRecognitionClass();

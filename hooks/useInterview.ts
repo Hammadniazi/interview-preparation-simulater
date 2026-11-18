@@ -1,201 +1,205 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { InterviewSession, Message, AnswerEvaluation, Difficulty, InterviewType } from '@/lib/types';
-import { generateId } from '@/lib/utils';
-import { saveInterviewSession, saveReport } from '@/lib/supabase';
+/**
+ * Interview session state machine.
+ *
+ *   question ──► answer ──submit──► evaluate ──► question … (×10)
+ *                                       └──(last)──► report ──► done
+ *   any async step ──fail──► error ──retry──► (the step that failed)
+ *
+ * Each async step is driven by an effect keyed on `phase`, so retrying is
+ * just "go back to that phase". State is mirrored to sessionStorage so a
+ * refresh resumes the interview instead of starting over.
+ */
+import { useCallback, useEffect, useReducer, useRef } from 'react';
+import type { AnswerEvaluation, GeneratedQuestion, InterviewConfig, InterviewReport } from '@/lib/types';
+import { TOTAL_QUESTIONS } from '@/lib/types';
+import { apiFetch, saveLocalReport } from '@/lib/history';
 
-interface UseInterviewOptions {
-  sessionId: string;
-  candidateName: string;
-  jobRole: string;
-  difficulty: Difficulty;
-  interviewType: InterviewType;
+type AsyncPhase = 'question' | 'evaluate' | 'report';
+export type Phase = AsyncPhase | 'answer' | 'done' | 'error';
+
+export interface PendingAnswer {
+  text: string;
+  mcqSelected?: number;
 }
 
-interface UseInterviewReturn {
-  session: InterviewSession | null;
-  currentQuestion: string | null;
-  currentMcqOptions: string[] | null;
-  isLoading: boolean;
-  isEvaluating: boolean;
-  isComplete: boolean;
-  isReportReady: boolean;
-  submitAnswer: (answer: string) => Promise<void>;
-  error: string | null;
+export interface InterviewState {
+  config: InterviewConfig;
+  phase: Phase;
+  index: number;
+  questions: GeneratedQuestion[];
+  answers: string[];
+  evaluations: AnswerEvaluation[];
+  pending: PendingAnswer | null;
+  error: { message: string; failed: AsyncPhase } | null;
+  report: InterviewReport | null;
 }
 
-export function useInterview(options: UseInterviewOptions): UseInterviewReturn {
-  const [session, setSession] = useState<InterviewSession | null>(null);
-  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
-  const [currentMcqOptions, setCurrentMcqOptions] = useState<string[] | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
-  const [isReportReady, setIsReportReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const initialized = useRef(false);
+type Action =
+  | { type: 'question-ready'; question: GeneratedQuestion }
+  | { type: 'submit'; answer: PendingAnswer }
+  | { type: 'evaluated'; evaluation: AnswerEvaluation }
+  | { type: 'report-ready'; report: InterviewReport }
+  | { type: 'fail'; failed: AsyncPhase; message: string }
+  | { type: 'retry' };
 
-  const fetchNextQuestion = useCallback(async (
-    currentSession: InterviewSession,
-    questionIndex: number
-  ) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/interview/generate-question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobRole: currentSession.jobRole,
-          difficulty: currentSession.difficulty,
-          interviewType: currentSession.interviewType,
-          questionIndex,
-          previousQuestions: currentSession.questions,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      setCurrentQuestion(data.question);
-      setCurrentMcqOptions(data.mcqOptions ?? null);
-
-      const aiMessage: Message = {
-        id: generateId(),
-        role: 'assistant',
-        content: data.question,
-        timestamp: new Date(),
-      };
-
-      setSession(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          questions: [...prev.questions, data.question],
-          messages: [...prev.messages, aiMessage],
-          currentQuestionIndex: questionIndex,
-        };
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate question');
-    } finally {
-      setIsLoading(false);
+function reducer(state: InterviewState, action: Action): InterviewState {
+  switch (action.type) {
+    case 'question-ready': {
+      const questions = [...state.questions];
+      questions[state.index] = action.question;
+      return { ...state, questions, phase: 'answer' };
     }
-  }, []);
+    case 'submit': {
+      if (state.phase !== 'answer') return state;
+      const answers = [...state.answers];
+      answers[state.index] = action.answer.text;
+      return { ...state, answers, pending: action.answer, phase: 'evaluate' };
+    }
+    case 'evaluated': {
+      const evaluations = [...state.evaluations];
+      evaluations[state.index] = action.evaluation;
+      const isLast = state.index + 1 >= TOTAL_QUESTIONS;
+      return {
+        ...state,
+        evaluations,
+        pending: null,
+        phase: isLast ? 'report' : 'question',
+        index: isLast ? state.index : state.index + 1,
+      };
+    }
+    case 'report-ready':
+      return { ...state, report: action.report, phase: 'done' };
+    case 'fail':
+      return { ...state, phase: 'error', error: { message: action.message, failed: action.failed } };
+    case 'retry':
+      return state.error ? { ...state, phase: state.error.failed, error: null } : state;
+  }
+}
 
-  // Initialize session — guard against React StrictMode double-invoke
+const storageKey = (id: string) => `iai:live:${id}`;
+
+function initState(config: InterviewConfig): InterviewState {
+  try {
+    const raw = sessionStorage.getItem(storageKey(config.sessionId));
+    if (raw) {
+      const saved = JSON.parse(raw) as InterviewState;
+      if (saved.config?.sessionId === config.sessionId) return saved;
+    }
+  } catch {
+    /* ignore corrupt storage */
+  }
+  return {
+    config,
+    phase: 'question',
+    index: 0,
+    questions: [],
+    answers: [],
+    evaluations: [],
+    pending: null,
+    error: null,
+    report: null,
+  };
+}
+
+const message = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.');
+
+export function useInterview(config: InterviewConfig) {
+  const [state, dispatch] = useReducer(reducer, config, initState);
+  // Guards against duplicate requests (React Strict Mode runs effects twice in dev).
+  const inFlight = useRef<string | null>(null);
+
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    const initial: InterviewSession = {
-      id: options.sessionId,
-      candidateName: options.candidateName,
-      jobRole: options.jobRole,
-      difficulty: options.difficulty,
-      interviewType: options.interviewType,
-      status: 'active',
-      currentQuestionIndex: 0,
-      questions: [],
-      messages: [],
-      evaluations: [],
-      startedAt: new Date(),
-      createdAt: new Date(),
-    };
-    setSession(initial);
-    fetchNextQuestion(initial, 0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const submitAnswer = useCallback(async (answer: string) => {
-    if (!session || !currentQuestion) return;
-
-    const userMessage: Message = {
-      id: generateId(),
-      role: 'user',
-      content: answer,
-      timestamp: new Date(),
-    };
-
-    setSession(prev => prev ? { ...prev, messages: [...prev.messages, userMessage] } : prev);
-    setIsEvaluating(true);
-
     try {
-      const evalRes = await fetch('/api/interview/evaluate-answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: currentQuestion,
-          answer,
-          jobRole: session.jobRole,
-          difficulty: session.difficulty,
-          interviewType: session.interviewType,
-          questionIndex: session.currentQuestionIndex,
-        }),
-      });
-      const evalData = await evalRes.json();
-      if (!evalRes.ok) throw new Error(evalData.error);
-
-      const evaluation: AnswerEvaluation = {
-        ...evalData.evaluation,
-        questionIndex: session.currentQuestionIndex,
-      };
-
-      const nextIndex = session.currentQuestionIndex + 1;
-      const updatedSession: InterviewSession = {
-        ...session,
-        messages: [...session.messages, userMessage],
-        evaluations: [...session.evaluations, evaluation],
-        currentQuestionIndex: nextIndex,
-      };
-
-      if (nextIndex >= 10) {
-        // Interview complete — evaluations already includes the final answer via updatedSession
-        const finalSession = {
-          ...updatedSession,
-          status: 'completed' as const,
-          completedAt: new Date(),
-          overallScore: Math.round(
-            updatedSession.evaluations.reduce((s, e) => s + e.overallScore, 0) / updatedSession.evaluations.length
-          ),
-        };
-        setSession(finalSession);
-        setIsComplete(true);
-
-        // Save session to Supabase
-        try {
-          await saveInterviewSession(finalSession);
-        } catch (err) {
-          console.error('Supabase save failed:', err);
-        }
-
-        // Generate report and store in sessionStorage for report page
-        const reportRes = await fetch('/api/interview/generate-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session: finalSession }),
-        });
-        const reportData = await reportRes.json();
-        if (reportData.report) {
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem(`report-${finalSession.id}`, JSON.stringify(reportData.report));
-          }
-          try {
-            await saveReport(finalSession.id, reportData.report);
-          } catch (err) {
-            console.error('Failed to save report to Supabase:', err);
-          }
-        }
-        setIsReportReady(true);
-      } else {
-        setSession(updatedSession);
-        await fetchNextQuestion(updatedSession, nextIndex);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to evaluate answer');
-    } finally {
-      setIsEvaluating(false);
+      sessionStorage.setItem(storageKey(state.config.sessionId), JSON.stringify(state));
+    } catch {
+      /* non-fatal */
     }
-  }, [session, currentQuestion, fetchNextQuestion]);
+  }, [state]);
 
-  return { session, currentQuestion, currentMcqOptions, isLoading, isEvaluating, isComplete, isReportReady, submitAnswer, error };
+  useEffect(() => {
+    const { phase, index, config: c } = state;
+    if (phase !== 'question' && phase !== 'evaluate' && phase !== 'report') return;
+
+    const key = `${phase}:${index}`;
+    if (inFlight.current === key) return;
+    inFlight.current = key;
+    const release = () => {
+      if (inFlight.current === key) inFlight.current = null;
+    };
+
+    if (phase === 'question') {
+      apiFetch<GeneratedQuestion>('/api/interview/generate-question', {
+        method: 'POST',
+        body: JSON.stringify({
+          jobRole: c.jobRole,
+          difficulty: c.difficulty,
+          interviewType: c.interviewType,
+          questionIndex: index,
+          previousQuestions: state.questions.slice(0, index).map((q) => q.question),
+        }),
+      })
+        .then((question) => dispatch({ type: 'question-ready', question }))
+        .catch((err) => dispatch({ type: 'fail', failed: 'question', message: message(err) }))
+        .finally(release);
+    }
+
+    if (phase === 'evaluate' && state.pending) {
+      const q = state.questions[index];
+      const mcq =
+        q?.mcq && state.pending.mcqSelected !== undefined
+          ? { options: q.mcq.options, correctIndex: q.mcq.correctIndex, selectedIndex: state.pending.mcqSelected }
+          : undefined;
+      apiFetch<{ evaluation: AnswerEvaluation }>('/api/interview/evaluate-answer', {
+        method: 'POST',
+        body: JSON.stringify({
+          question: q?.question,
+          answer: state.pending.text,
+          mcq,
+          jobRole: c.jobRole,
+          difficulty: c.difficulty,
+          interviewType: c.interviewType,
+          questionIndex: index,
+        }),
+      })
+        .then(({ evaluation }) => dispatch({ type: 'evaluated', evaluation: { ...evaluation, questionIndex: index } }))
+        .catch((err) => dispatch({ type: 'fail', failed: 'evaluate', message: message(err) }))
+        .finally(release);
+    }
+
+    if (phase === 'report') {
+      apiFetch<{ report: InterviewReport }>('/api/interview/generate-report', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: c.sessionId,
+          candidateName: c.candidateName,
+          jobRole: c.jobRole,
+          difficulty: c.difficulty,
+          interviewType: c.interviewType,
+          evaluations: state.evaluations,
+        }),
+      })
+        .then(({ report }) => {
+          saveLocalReport(report);
+          dispatch({ type: 'report-ready', report });
+        })
+        .catch((err) => dispatch({ type: 'fail', failed: 'report', message: message(err) }))
+        .finally(release);
+    }
+    // The step only depends on phase/index; other fields are read from the snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.phase, state.index]);
+
+  const submitAnswer = useCallback((answer: PendingAnswer) => dispatch({ type: 'submit', answer }), []);
+  const retry = useCallback(() => dispatch({ type: 'retry' }), []);
+
+  return {
+    state,
+    currentQuestion: state.questions[state.index] ?? null,
+    canAnswer: state.phase === 'answer',
+    answeredCount: state.evaluations.filter(Boolean).length,
+    submitAnswer,
+    retry,
+  };
 }
