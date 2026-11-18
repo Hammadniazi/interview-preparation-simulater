@@ -1,137 +1,108 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
-import { InterviewReport } from '@/lib/types';
-import { getScoreLabel, formatDate } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import type { InterviewReport } from '@/lib/types';
+import { DIFFICULTY_LABELS, INTERVIEW_TYPE_LABELS, SCORE_DIMENSIONS } from '@/lib/types';
+import { formatDate, getScoreLabel } from '@/lib/utils';
 
-interface ReportExportProps {
-  report: InterviewReport;
-}
+const INK: [number, number, number] = [23, 24, 28];
+const MUTED: [number, number, number] = [92, 94, 102];
+const ACCENT: [number, number, number] = [30, 107, 78];
 
-export function ReportExport({ report }: ReportExportProps) {
-  const [isExporting, setIsExporting] = useState(false);
+export function ReportExport({ report }: { report: InterviewReport }) {
+  const [busy, setBusy] = useState(false);
 
-  const exportToPDF = async () => {
-    setIsExporting(true);
+  const exportPdf = async () => {
+    setBusy(true);
     try {
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', format: 'a4' });
-
       const margin = 20;
-      let y = margin;
-      const lineH = 7;
       const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
       const maxW = pageW - margin * 2;
+      let y = margin;
 
-      const addText = (text: string, size = 10, bold = false, color = [0, 0, 0]) => {
-        doc.setFontSize(size);
-        doc.setFont('helvetica', bold ? 'bold' : 'normal');
-        doc.setTextColor(...(color as [number, number, number]));
-        const lines = doc.splitTextToSize(text, maxW);
-        if (y + lines.length * lineH > doc.internal.pageSize.getHeight() - margin) {
+      const ensure = (h: number) => {
+        if (y + h > pageH - margin) {
           doc.addPage();
           y = margin;
         }
+      };
+      const write = (text: string, size = 10, opts: { bold?: boolean; color?: [number, number, number]; font?: 'helvetica' | 'times'; gap?: number } = {}) => {
+        doc.setFont(opts.font ?? 'helvetica', opts.bold ? 'bold' : 'normal');
+        doc.setFontSize(size);
+        doc.setTextColor(...(opts.color ?? INK));
+        const lines = doc.splitTextToSize(text, maxW) as string[];
+        const lh = size * 0.45;
+        ensure(lines.length * lh);
         doc.text(lines, margin, y);
-        y += lines.length * lineH + 2;
+        y += lines.length * lh + (opts.gap ?? 2);
       };
-
-      const addSeparator = () => {
-        doc.setDrawColor(200, 200, 200);
+      const section = (title: string) => {
+        y += 4;
+        ensure(14);
+        doc.setDrawColor(220, 216, 206);
         doc.line(margin, y, pageW - margin, y);
-        y += 6;
+        y += 7;
+        write(title.toUpperCase(), 8, { bold: true, color: MUTED, gap: 3 });
       };
+      const bullets = (items: string[]) => items.forEach((t) => write(`•  ${t}`, 10, { gap: 1.5 }));
 
-      // Title
-      addText('INTERVIEWAI - INTERVIEW REPORT', 20, true, [109, 40, 217]);
-      addText(formatDate(report.completedAt), 10, false, [120, 120, 120]);
-      y += 4;
-      addSeparator();
+      write('InterviewAI — Interview debrief', 9, { color: MUTED, gap: 4 });
+      write(`${report.candidateName} · ${report.jobRole}`, 22, { font: 'times', gap: 3 });
+      write(
+        `${DIFFICULTY_LABELS[report.difficulty]} · ${INTERVIEW_TYPE_LABELS[report.interviewType]} · ${formatDate(report.completedAt)}`,
+        10,
+        { color: MUTED, gap: 6 },
+      );
 
-      // Candidate Info
-      addText('CANDIDATE INFORMATION', 13, true, [50, 50, 50]);
-      addText(`Name: ${report.candidateName}`);
-      addText(`Role: ${report.jobRole}`);
-      addText(`Difficulty: ${report.difficulty.charAt(0).toUpperCase() + report.difficulty.slice(1)}`);
-      addText(`Interview Type: ${report.interviewType}`);
-      y += 4;
+      write(`${report.overallScore}/100`, 34, { font: 'times', color: ACCENT, gap: 2 });
+      write(getScoreLabel(report.overallScore), 11, { bold: true, gap: 4 });
+      SCORE_DIMENSIONS.forEach(({ key, label }) => write(`${label}: ${report.scoreBreakdown[key]}/100`, 10, { gap: 1 }));
 
-      // Scores
-      addSeparator();
-      addText('PERFORMANCE SCORES', 13, true, [50, 50, 50]);
-      addText(`Overall Score: ${report.overallScore}/100 (${getScoreLabel(report.overallScore)})`, 12, true, [109, 40, 217]);
-      addText(`Technical Knowledge: ${report.scoreBreakdown.technicalKnowledge}/100`);
-      addText(`Communication: ${report.scoreBreakdown.communication}/100`);
-      addText(`Relevance: ${report.scoreBreakdown.relevance}/100`);
-      addText(`Confidence: ${report.scoreBreakdown.confidence}/100`);
-      y += 4;
+      section('Strengths');
+      bullets(report.strengths);
+      section('Areas to improve');
+      bullets(report.weaknesses);
+      section('Skill gaps');
+      bullets(report.skillGaps);
+      section('Recommendations');
+      report.recommendations.forEach((r, i) => write(`${i + 1}.  ${r}`, 10, { gap: 1.5 }));
 
-      // Strengths
-      addSeparator();
-      addText('STRENGTHS', 13, true, [50, 50, 50]);
-      report.strengths.forEach(s => addText(`• ${s}`));
-      y += 4;
-
-      // Weaknesses
-      addSeparator();
-      addText('AREAS FOR IMPROVEMENT', 13, true, [50, 50, 50]);
-      report.weaknesses.forEach(w => addText(`• ${w}`));
-      y += 4;
-
-      // Skill Gaps
-      addSeparator();
-      addText('SKILL GAPS', 13, true, [50, 50, 50]);
-      report.skillGaps.forEach(g => addText(`• ${g}`));
-      y += 4;
-
-      // Recommendations
-      addSeparator();
-      addText('RECOMMENDATIONS', 13, true, [50, 50, 50]);
-      report.recommendations.forEach((r, i) => addText(`${i + 1}. ${r}`));
-      y += 4;
-
-      // Learning Roadmap
-      addSeparator();
-      addText('30-DAY LEARNING ROADMAP', 13, true, [50, 50, 50]);
-      report.learningRoadmap.forEach(week => {
-        addText(`Week ${week.week}: ${week.title}`, 11, true);
-        addText(`Goal: ${week.goal}`, 9, false, [80, 80, 80]);
-        week.topics.forEach(t => addText(`  • ${t}`, 9));
-        y += 2;
+      section('Four-week plan');
+      report.learningRoadmap.forEach((w) => {
+        write(`Week ${w.week} — ${w.title}`, 12, { font: 'times', gap: 1.5 });
+        if (w.goal) write(`Goal: ${w.goal}`, 9, { color: MUTED, gap: 1.5 });
+        w.topics.forEach((t) => write(`•  ${t}`, 9, { gap: 1 }));
+        if (w.resources.length) write(`Resources: ${w.resources.join('; ')}`, 9, { color: MUTED, gap: 4 });
       });
 
-      // Footer
-      addSeparator();
-      addText('Generated by InterviewAI - Powered by Google Gemini', 9, false, [150, 150, 150]);
+      section('Question by question');
+      report.evaluations.forEach((e, i) => {
+        write(`Q${i + 1} · ${e.overallScore}/100`, 9, { bold: true, color: MUTED, gap: 1 });
+        write(e.question, 10, { bold: true, gap: 1.5 });
+        write(e.feedback, 9, { color: MUTED, gap: 4 });
+      });
 
-      doc.save(`interview-report-${report.candidateName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.pdf`);
+      const slug = report.candidateName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'candidate';
+      doc.save(`interview-debrief-${slug}-${report.sessionId.slice(0, 8)}.pdf`);
+      toast.success('PDF downloaded');
     } catch (err) {
-      console.error('Export failed:', err);
-      alert('Export failed. Please try again.');
+      console.error('PDF export failed', err);
+      toast.error("Couldn't create the PDF. Please try again.");
     } finally {
-      setIsExporting(false);
+      setBusy(false);
     }
   };
 
   return (
-    <Button
-      onClick={exportToPDF}
-      disabled={isExporting}
-      className="gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700"
-    >
-      {isExporting ? (
-        <>
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Exporting...
-        </>
-      ) : (
-        <>
-          <Download className="w-4 h-4" />
-          Export PDF
-        </>
-      )}
+    <Button onClick={exportPdf} disabled={busy} variant="outline">
+      {busy ? <Loader2 className="animate-spin" /> : <Download />}
+      {busy ? 'Exporting…' : 'Export PDF'}
     </Button>
   );
 }

@@ -1,90 +1,63 @@
-'use client';
+import type { LearningWeek } from '@/lib/types';
+import { Reveal } from '@/components/shared/Reveal';
 
-import { motion } from 'framer-motion';
-import { LearningWeek } from '@/lib/types';
-import { BookOpen, CheckSquare, Target, ExternalLink } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-
-interface LearningRoadmapProps {
-  roadmap: LearningWeek[];
-}
-
-const weekColors = [
-  'border-violet-500/50 bg-violet-500/5',
-  'border-blue-500/50 bg-blue-500/5',
-  'border-emerald-500/50 bg-emerald-500/5',
-  'border-orange-500/50 bg-orange-500/5',
-];
-
-const weekBadgeColors = [
-  'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-  'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-];
-
-export function LearningRoadmap({ roadmap }: LearningRoadmapProps) {
+export function LearningRoadmap({ roadmap }: { roadmap: LearningWeek[] }) {
   return (
-    <div className="space-y-4">
-      {roadmap.map((week, index) => (
-        <motion.div
-          key={week.week}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className={`relative p-5 rounded-xl border-2 ${weekColors[index % weekColors.length]}`}
-        >
-          {/* Week badge */}
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${weekBadgeColors[index % weekBadgeColors.length]}`}>
-                Week {week.week}
-              </span>
-              <h3 className="font-semibold text-sm">{week.title}</h3>
+    <ol className="relative space-y-0">
+      {roadmap.map((week, i) => (
+        <Reveal as="li" key={`${week.week}-${i}`} delay={i * 0.05} className="relative grid gap-4 pb-10 pl-10 last:pb-0 sm:grid-cols-[140px_1fr] sm:pl-0">
+          {/* timeline rail */}
+          {i < roadmap.length - 1 && (
+            <span aria-hidden className="absolute top-8 bottom-1 left-[11.5px] w-px bg-border sm:left-[151.5px]" />
+          )}
+          <span
+            aria-hidden
+            className="absolute top-1 left-0 grid h-6 w-6 place-items-center rounded-full border border-border-strong bg-background text-[11px] font-medium tabular-nums sm:left-[140px]"
+          >
+            {week.week}
+          </span>
+
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground sm:pt-1.5">Week {week.week}</p>
+
+          <div className="sm:pl-12">
+            <h3 className="font-display text-2xl leading-snug">{week.title}</h3>
+            {week.goal && (
+              <p className="mt-2 text-sm">
+                <span className="text-muted-foreground">Goal — </span>
+                {week.goal}
+              </p>
+            )}
+            <div className="mt-5 grid gap-6 sm:grid-cols-2">
+              {week.topics.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground">Study</h4>
+                  <ul className="mt-2 space-y-1.5 text-sm">
+                    {week.topics.map((t) => (
+                      <li key={t} className="flex gap-2">
+                        <span aria-hidden className="mt-2 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {week.resources.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground">Resources</h4>
+                  <ul className="mt-2 space-y-1.5 text-sm text-foreground/85">
+                    {week.resources.map((r) => (
+                      <li key={r} className="flex gap-2">
+                        <span aria-hidden className="text-muted-foreground">→</span>
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Goal */}
-          <div className="flex items-start gap-2 mb-3 p-2.5 rounded-lg bg-background/60">
-            <Target className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
-            <p className="text-xs text-muted-foreground">{week.goal}</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Topics */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">Topics to Study</span>
-              </div>
-              <ul className="space-y-1.5">
-                {week.topics.map((topic, i) => (
-                  <li key={i} className="flex items-center gap-2 text-xs">
-                    <CheckSquare className="w-3 h-3 text-muted-foreground/60 shrink-0" />
-                    <span>{topic}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Resources */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">Resources</span>
-              </div>
-              <ul className="space-y-1.5">
-                {week.resources.map((resource, i) => (
-                  <li key={i} className="flex items-center gap-2 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 shrink-0" />
-                    <span className="text-muted-foreground">{resource}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </motion.div>
+        </Reveal>
       ))}
-    </div>
+    </ol>
   );
 }

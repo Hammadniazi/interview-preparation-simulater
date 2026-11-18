@@ -1,229 +1,251 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { ArrowRight, User, Briefcase, Zap, MessageSquare, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Enter } from '@/components/shared/Reveal';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Difficulty, InterviewType, JOB_ROLES, DIFFICULTY_LABELS, INTERVIEW_TYPE_LABELS } from '@/lib/types';
-import { generateId } from '@/lib/utils';
-import { cn } from '@/lib/utils';
-import { AIAvatar } from '@/components/interview/AIAvatar';
+  DIFFICULTIES,
+  DIFFICULTY_HINTS,
+  DIFFICULTY_LABELS,
+  INTERVIEW_TYPES,
+  INTERVIEW_TYPE_HINTS,
+  INTERVIEW_TYPE_LABELS,
+  JOB_ROLES,
+  TOTAL_QUESTIONS,
+  isDifficulty,
+  isInterviewType,
+  type Difficulty,
+  type InterviewType,
+} from '@/lib/types';
+import { cn, generateId } from '@/lib/utils';
 
-const difficulties: Difficulty[] = ['beginner', 'intermediate', 'advanced', 'expert'];
-const interviewTypes: InterviewType[] = ['technical', 'behavioral', 'system-design', 'mixed', 'hr'];
+const LAST_CONFIG_KEY = 'iai:last-setup';
 
-const difficultyColors: Record<Difficulty, string> = {
-  beginner: 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-  intermediate: 'border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  advanced: 'border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-400',
-  expert: 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400',
-};
-
-const interviewTypeIcons: Record<InterviewType, string> = {
-  technical: '💻',
-  behavioral: '🧠',
-  'system-design': '🏗️',
-  mixed: '🔀',
-  hr: '🤝',
-};
+function ChoiceGroup<T extends string>({
+  legend,
+  name,
+  options,
+  value,
+  onChange,
+  labels,
+  hints,
+  columns,
+}: {
+  legend: string;
+  name: string;
+  options: readonly T[];
+  value: T;
+  onChange: (v: T) => void;
+  labels: Record<T, string>;
+  hints: Record<T, string>;
+  columns: string;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-medium">{legend}</legend>
+      <div className={cn('mt-3 grid gap-2', columns)}>
+        {options.map((opt) => {
+          const checked = value === opt;
+          return (
+            <label
+              key={opt}
+              className={cn(
+                'relative flex min-h-16 flex-col justify-center rounded-lg border px-3.5 py-3 transition-[border-color,background-color,box-shadow] duration-150',
+                'has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/25',
+                checked
+                  ? 'border-foreground bg-surface shadow-[inset_0_0_0_1px_var(--foreground)]'
+                  : 'border-border bg-surface/60 hover:border-border-strong',
+              )}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={opt}
+                checked={checked}
+                onChange={() => onChange(opt)}
+                className="sr-only"
+              />
+              <span className="text-sm font-medium">{labels[opt]}</span>
+              <span className="mt-0.5 text-xs leading-snug text-muted-foreground">{hints[opt]}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
 
 export default function InterviewSetupPage() {
   const router = useRouter();
   const [candidateName, setCandidateName] = useState('');
   const [jobRole, setJobRole] = useState('');
-  const [difficulty, setDifficulty] = useState<Difficulty>('beginner');
+  const [difficulty, setDifficulty] = useState<Difficulty>('intermediate');
   const [interviewType, setInterviewType] = useState<InterviewType>('technical');
+  const [submitted, setSubmitted] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
 
-  const canStart = candidateName.trim().length > 1 && jobRole.length > 0;
+  // Restore the last configuration — most people practise the same role repeatedly.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LAST_CONFIG_KEY);
+      if (!raw) return;
+      const c = JSON.parse(raw);
+      /* eslint-disable react-hooks/set-state-in-effect -- one-time hydration from storage */
+      if (typeof c.candidateName === 'string') setCandidateName(c.candidateName);
+      if (typeof c.jobRole === 'string' && (JOB_ROLES as readonly string[]).includes(c.jobRole)) setJobRole(c.jobRole);
+      if (isDifficulty(c.difficulty)) setDifficulty(c.difficulty);
+      if (isInterviewType(c.interviewType)) setInterviewType(c.interviewType);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-  const handleStart = async () => {
-    if (!canStart) return;
+  const nameError = candidateName.trim().length < 2 ? 'Enter your name (at least 2 characters).' : null;
+  const roleError = !jobRole ? 'Choose the role you are interviewing for.' : null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
+    if (nameError) return document.getElementById('name')?.focus();
+    if (roleError) return document.getElementById('role')?.focus();
+
     setIsStarting(true);
-    const sessionId = generateId();
+    const config = { candidateName: candidateName.trim(), jobRole, difficulty, interviewType };
+    try {
+      localStorage.setItem(LAST_CONFIG_KEY, JSON.stringify(config));
+    } catch {
+      /* ignore */
+    }
     const params = new URLSearchParams({
-      name: candidateName.trim(),
-      role: jobRole,
+      name: config.candidateName,
+      role: config.jobRole,
       difficulty,
       type: interviewType,
     });
-    router.push(`/interview/${sessionId}?${params}`);
+    router.push(`/interview/${generateId()}?${params}`);
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-12 bg-gradient-to-b from-background to-muted/20">
-      <div className="max-w-2xl mx-auto px-4">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-8 pt-8"
+    <div className="mx-auto grid max-w-6xl gap-12 px-4 pt-28 pb-20 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:pt-36">
+      <Enter className="lg:sticky lg:top-32 lg:self-start">
+        <p className="text-sm text-muted-foreground">New session</p>
+        <h1 className="mt-3 font-display text-5xl leading-[1.02] tracking-tight sm:text-6xl">Set the scene.</h1>
+        <p className="mt-5 max-w-md text-muted-foreground">
+          The interviewer adapts to the role and level you choose. Expect {TOTAL_QUESTIONS} questions that get harder as
+          you go.
+        </p>
+        <ul className="mt-8 space-y-3 border-t border-border pt-6 text-sm text-muted-foreground">
+          <li className="flex gap-3">
+            <span className="font-mono text-xs text-foreground tabular-nums">~20m</span> Typical session length
+          </li>
+          <li className="flex gap-3">
+            <span className="font-mono text-xs text-foreground tabular-nums">4×</span> Scores per answer, plus one concrete fix
+          </li>
+          <li className="flex gap-3">
+            <span className="font-mono text-xs text-foreground tabular-nums">PDF</span> Exportable debrief and study plan
+          </li>
+        </ul>
+      </Enter>
+
+      <Enter delay={0.08}>
+        <form
+          noValidate
+          onSubmit={handleSubmit}
+          className="space-y-8 rounded-2xl border border-border bg-surface p-5 sm:p-8"
         >
-          <div className="flex justify-center mb-4">
-            <AIAvatar size="lg" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">Setup Your Interview</h1>
-          <p className="text-muted-foreground mt-2">
-            Configure your mock interview session. The AI will generate 10 tailored questions.
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Card className="border-border/50 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-xl">Interview Configuration</CardTitle>
-              <CardDescription>All fields are required to generate personalized questions.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Candidate Name */}
-              <div className="space-y-2">
-                <Label htmlFor="name" className="flex items-center gap-2 text-sm font-medium">
-                  <User className="w-4 h-4 text-violet-600" />
-                  Your Name
-                </Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Alex Johnson"
-                  value={candidateName}
-                  onChange={(e) => setCandidateName(e.target.value)}
-                  className="bg-background"
-                />
-              </div>
-
-              {/* Job Role */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <Briefcase className="w-4 h-4 text-violet-600" />
-                  Target Role
-                </Label>
-                <Select onValueChange={setJobRole} value={jobRole}>
-                  <SelectTrigger className="bg-background">
-                    <SelectValue placeholder="Select the role you're interviewing for" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {JOB_ROLES.map(role => (
-                      <SelectItem key={role} value={role}>{role}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Difficulty */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <Zap className="w-4 h-4 text-violet-600" />
-                  Difficulty Level
-                </Label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {difficulties.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setDifficulty(d)}
-                      className={cn(
-                        'p-3 rounded-xl border-2 text-center transition-all duration-200 hover:scale-105',
-                        difficulty === d
-                          ? difficultyColors[d]
-                          : 'border-border hover:border-muted-foreground/40'
-                      )}
-                    >
-                      <div className="font-semibold text-sm">{DIFFICULTY_LABELS[d]}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Interview Type */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <MessageSquare className="w-4 h-4 text-violet-600" />
-                  Interview Type
-                </Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {interviewTypes.map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => setInterviewType(type)}
-                      className={cn(
-                        'p-3 rounded-xl border-2 text-left transition-all duration-200',
-                        interviewType === type
-                          ? 'border-violet-500 bg-violet-500/10'
-                          : 'border-border hover:border-muted-foreground/40'
-                      )}
-                    >
-                      <div className="text-lg mb-1">{interviewTypeIcons[type]}</div>
-                      <div className={cn(
-                        'font-semibold text-xs',
-                        interviewType === type ? 'text-violet-700 dark:text-violet-400' : ''
-                      )}>
-                        {INTERVIEW_TYPE_LABELS[type]}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Summary */}
-              {canStart && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="bg-violet-500/5 border border-violet-500/20 rounded-xl p-4"
-                >
-                  <p className="text-sm font-medium text-violet-700 dark:text-violet-400 mb-2">Session Summary</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">{candidateName}</Badge>
-                    <Badge variant="secondary">{jobRole}</Badge>
-                    <Badge variant="secondary">{DIFFICULTY_LABELS[difficulty]}</Badge>
-                    <Badge variant="secondary">{INTERVIEW_TYPE_LABELS[interviewType]}</Badge>
-                    <Badge variant="secondary">10 Questions</Badge>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Start Button */}
-              <Button
-                onClick={handleStart}
-                disabled={!canStart || isStarting}
-                className="w-full gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700 h-12 text-base font-semibold shadow-lg shadow-violet-500/20"
-              >
-                {isStarting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Preparing Interview...
-                  </>
-                ) : (
-                  <>
-                    Start Interview
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </Button>
-              {!canStart && (
-                <p className="text-xs text-muted-foreground text-center">
-                  Please fill in your name and select a role to continue.
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="name">Your name</Label>
+              <Input
+                id="name"
+                autoComplete="given-name"
+                placeholder="Alex"
+                value={candidateName}
+                maxLength={80}
+                onChange={(e) => setCandidateName(e.target.value)}
+                aria-invalid={submitted && !!nameError}
+                aria-describedby={submitted && nameError ? 'name-error' : undefined}
+              />
+              {submitted && nameError && (
+                <p id="name-error" role="alert" className="text-xs text-poor">
+                  {nameError}
                 </p>
               )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Target role</Label>
+              <Select value={jobRole} onValueChange={(v) => v && setJobRole(v)}>
+                <SelectTrigger
+                  id="role"
+                  aria-invalid={submitted && !!roleError}
+                  aria-describedby={submitted && roleError ? 'role-error' : undefined}
+                >
+                  <SelectValue placeholder="Choose a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {JOB_ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {submitted && roleError && (
+                <p id="role-error" role="alert" className="text-xs text-poor">
+                  {roleError}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <ChoiceGroup
+            legend="Level"
+            name="difficulty"
+            options={DIFFICULTIES}
+            value={difficulty}
+            onChange={setDifficulty}
+            labels={DIFFICULTY_LABELS}
+            hints={DIFFICULTY_HINTS}
+            columns="grid-cols-2 sm:grid-cols-4"
+          />
+
+          <ChoiceGroup
+            legend="Interview style"
+            name="type"
+            options={INTERVIEW_TYPES}
+            value={interviewType}
+            onChange={setInterviewType}
+            labels={INTERVIEW_TYPE_LABELS}
+            hints={INTERVIEW_TYPE_HINTS}
+            columns="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+          />
+
+          <div className="flex flex-col-reverse items-stretch gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {jobRole ? `${jobRole} · ${DIFFICULTY_LABELS[difficulty]} · ${INTERVIEW_TYPE_LABELS[interviewType]}` : `${TOTAL_QUESTIONS} questions`}
+            </p>
+            <Button type="submit" size="lg" disabled={isStarting} className="group">
+              {isStarting ? (
+                <>
+                  <Loader2 className="animate-spin" /> Preparing…
+                </>
+              ) : (
+                <>
+                  Begin interview
+                  <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </Enter>
     </div>
   );
 }

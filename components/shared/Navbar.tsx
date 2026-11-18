@@ -2,124 +2,128 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Brain, LayoutDashboard, FileText, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Menu, X } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { Logo } from './Logo';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const navLinks = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/interview/setup', label: 'Practice', icon: Brain },
-  { href: '/resume', label: 'Resume', icon: FileText },
+  { href: '/interview/setup', label: 'Practice', match: '/interview' },
+  { href: '/resume', label: 'Resume review', match: '/resume' },
+  { href: '/dashboard', label: 'History', match: '/dashboard' },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const isLanding = pathname === '/';
+  const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Close the mobile menu on navigation.
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
+    setOpen(false);
+  }
+
+  const inInterview = pathname.startsWith('/interview');
 
   return (
-    <motion.nav
-      initial={{ y: -80, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5 }}
+    <header
       className={cn(
-        'fixed top-0 left-0 right-0 z-50 border-b transition-all duration-300',
-        isLanding
-          ? 'bg-background/85 backdrop-blur-xl border-border/50'
-          : 'bg-background/95 backdrop-blur-sm border-border'
+        'fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color] duration-200',
+        scrolled || open ? 'border-border bg-background/90 backdrop-blur-md' : 'border-transparent bg-background/0',
       )}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg group-hover:shadow-violet-500/30 transition-all duration-300">
-              <Brain className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg tracking-tight">
-              Interview<span className="text-violet-600">AI</span>
-            </span>
-          </Link>
+      <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="Main">
+        <Logo />
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href}>
-                <Button
-                  variant="ghost"
-                  size="sm"
+        <ul className="hidden items-center gap-1 md:flex">
+          {navLinks.map(({ href, label, match }) => {
+            const active = pathname.startsWith(match);
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'gap-2 text-foreground/80 hover:text-foreground',
-                    pathname.startsWith(href)
-                      ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 hover:text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 dark:hover:text-violet-200'
-                      : 'hover:bg-accent'
+                    'relative rounded-md px-3 py-2 text-sm transition-colors',
+                    active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <Icon className="w-4 h-4" />
                   {label}
-                </Button>
-              </Link>
-            ))}
-          </div>
+                  {active && (
+                    <motion.span
+                      layoutId="nav-underline"
+                      className="absolute inset-x-3 -bottom-[13px] h-0.5 rounded-full bg-foreground"
+                    />
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
 
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            {isLanding && (
-              <Link href="/interview/setup" className="hidden md:block">
-                <Button size="sm" className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 hover:from-violet-700 hover:to-indigo-700">
-                  Get Started
-                </Button>
-              </Link>
-            )}
-            {/* Mobile menu */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setMobileOpen(!mobileOpen)}
-            >
-              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        <div className="flex items-center gap-1.5">
+          <ThemeToggle />
+          {!inInterview && (
+            <Button asChild size="sm" className="hidden md:inline-flex">
+              <Link href="/interview/setup">Start a session</Link>
             </Button>
-          </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 md:hidden"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+            aria-label={open ? 'Close menu' : 'Open menu'}
+          >
+            {open ? <X /> : <Menu />}
+          </Button>
         </div>
-      </div>
+      </nav>
 
-      {/* Mobile Menu */}
-      {mobileOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="md:hidden border-t border-border bg-background/95 backdrop-blur-sm"
-        >
-          <div className="px-4 py-3 space-y-1">
-            {navLinks.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    'w-full justify-start gap-2 text-foreground/80 hover:text-foreground',
-                    pathname.startsWith(href)
-                      ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 hover:text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 dark:hover:text-violet-200'
-                      : 'hover:bg-accent'
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  {label}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            id="mobile-menu"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }}
+            className="border-t border-border md:hidden"
+          >
+            <ul className="space-y-1 px-4 py-3">
+              {navLinks.map(({ href, label, match }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    aria-current={pathname.startsWith(match) ? 'page' : undefined}
+                    className="flex h-11 items-center rounded-lg px-3 text-[15px] text-foreground/85 hover:bg-muted aria-[current=page]:bg-muted aria-[current=page]:font-medium aria-[current=page]:text-foreground"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
+              <li className="pt-2">
+                <Button asChild className="w-full">
+                  <Link href="/interview/setup">Start a session</Link>
                 </Button>
-              </Link>
-            ))}
-            <Link href="/interview/setup" onClick={() => setMobileOpen(false)}>
-              <Button className="w-full mt-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0">
-                Get Started Free
-              </Button>
-            </Link>
-          </div>
-        </motion.div>
-      )}
-    </motion.nav>
+              </li>
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </header>
   );
 }
